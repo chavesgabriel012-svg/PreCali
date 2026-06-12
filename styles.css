@@ -656,6 +656,20 @@ button { font-family: var(--font-body); }
   font-family: var(--font-mono);
 }
 
+.amount-input {
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.amount-helper {
+  margin-top: 0.45rem;
+  color: var(--emerald);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 /* Sliders */
 input[type="range"] {
   width: 100%;

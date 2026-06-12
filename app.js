@@ -74,6 +74,22 @@
     return symbol + new Intl.NumberFormat('es-CR', { maximumFractionDigits: 0 }).format(Math.round(v));
   }
 
+  function fmtPlano(v, mon) {
+    const symbol = monedaInfo(mon).simbolo;
+    const n = Math.max(0, Math.round(Number(v) || 0));
+    return symbol + new Intl.NumberFormat('es-CR', { maximumFractionDigits: 0 }).format(n).replace(/,/g, ' ');
+  }
+
+  function describirMonto(v, mon) {
+    const n = Math.max(0, Math.round(Number(v) || 0));
+    if (n === 0) return `${fmtPlano(0, mon)} · 0`;
+    const divisor = n >= 1000000 ? 1000000 : 1000;
+    const unidad = n >= 1000000 ? 'millones' : 'mil';
+    const valor = n / divisor;
+    const decimales = valor >= 10 || Number.isInteger(valor) ? 0 : 1;
+    return `${fmtPlano(n, mon)} · ${valor.toLocaleString('es-CR', { maximumFractionDigits: decimales })} ${unidad}`;
+  }
+
   function fechaLegible(iso) {
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const [y, m, d] = iso.split('-');
@@ -116,9 +132,9 @@
   let paisActual = 'cr';
   let seleccion = new Set(seleccionInicialCR);
   let ultimosResultados = [];
-  let monedaAnterior = 'crc'; // para detectar cambios de moneda y reescalar sliders
+  let monedaAnterior = 'crc'; // para detectar cambios de moneda y ajustar campos manuales
 
-  // Rangos de los sliders según moneda. Definimos valores cerrados y limpios para cada uno.
+  // Rangos de los campos según moneda. Definimos valores cerrados y limpios para cada uno.
   const RANGOS_SLIDERS = {
     crc: {
       ingreso:  { min: 200000, max: 10000000, step: 100000, def: 1200000 },
@@ -168,6 +184,7 @@
     plazoHint: $('plazo-hint'), prima: $('prima'), moneda: $('moneda'),
     orden: $('orden'), primaRow: $('prima-row'),
     oIngreso: $('o-ingreso'), oDeudas: $('o-deudas'), oPlazo: $('o-plazo'), oPrima: $('o-prima'),
+    hIngreso: $('h-ingreso'), hDeudas: $('h-deudas'), hPrima: $('h-prima'),
     countSel: $('count-sel'), countTotal: $('count-total'), banksGrid: $('banks-grid'), results: $('results'),
     modalHost: $('modal-host'),
     aiCard: $('ai-card'), aiTitle: $('ai-title'),
@@ -175,6 +192,12 @@
     verificaciones: $('verificaciones'),
     pais: $('pais'), paisBandera: $('pais-bandera')
   };
+
+  function actualizarAyudasMontos(moneda) {
+    if (els.hIngreso) els.hIngreso.textContent = describirMonto(els.ingreso.value, moneda);
+    if (els.hDeudas) els.hDeudas.textContent = describirMonto(els.deudas.value, moneda);
+    if (els.hPrima) els.hPrima.textContent = describirMonto(els.prima.value, moneda);
+  }
 
   // ---------- País / región ----------
   function getPais(id = paisActual) {
@@ -215,16 +238,16 @@
       els.moneda.disabled = esDolarizado;
       if (esDolarizado && els.moneda.value !== 'usd') {
         els.moneda.value = 'usd';
+        aplicarRangosMoneda('usd', false);
         monedaAnterior = 'usd';
-        aplicarRangosMoneda('usd', true);
       }
       if (!esDolarizado) {
         els.moneda.disabled = false;
         if (els.moneda.value === 'usd') {
           els.moneda.value = 'crc';
         }
-        monedaAnterior = 'crc';
         aplicarRangosMoneda('crc', false);
+        monedaAnterior = 'crc';
       }
     }
   }
@@ -480,7 +503,7 @@
       barreras.push({
         titulo: tipoActual === 'hipoteca' ? 'No has indicado prima para la propiedad' : 'No has indicado prima para el vehículo',
         desc: `Para ${tipoActual === 'hipoteca' ? 'una hipoteca' : 'un préstamo vehicular'}, todos los bancos requieren al menos un porcentaje del valor del bien como prima. <strong>${bancoFinancia.nombre}</strong> es el más flexible, financiando hasta <strong>${Math.round(minFinancia * 100)}%</strong>, lo que requiere una prima mínima del <strong>${primaMinimaPct}%</strong>.`,
-        accion: 'Ajustá el slider de prima al monto que tenés disponible para ahorrar o invertir como cuota inicial.'
+        accion: 'Ajustá la prima al monto que tenés disponible para ahorrar o invertir como cuota inicial.'
       });
     }
 
@@ -864,7 +887,7 @@
             <button class="modal-close" onclick="cerrarModal(event)">×</button>
           </div>
           <div style="font-size:13.5px; color:var(--ink-soft); line-height:1.7;">
-            <p style="margin-bottom:1rem;"><strong>1. Qué datos recopilamos.</strong> ?nicamente los que vos nos das voluntariamente al solicitar tu PDF: nombre, apellido y correo electrónico. Los datos del simulador (ingreso, deudas) se procesan localmente en tu navegador y no se almacenan en nuestros servidores.</p>
+            <p style="margin-bottom:1rem;"><strong>1. Qué datos recopilamos.</strong> Únicamente los que vos nos das voluntariamente al solicitar tu PDF: nombre, apellido y correo electrónico. Los datos del simulador (ingreso, deudas) se procesan localmente en tu navegador y no se almacenan en nuestros servidores.</p>
             <p style="margin-bottom:1rem;"><strong>2. Para qué los usamos.</strong> Para enviarte el PDF que solicitaste y, si aceptaste, comunicaciones ocasionales sobre actualizaciones de tasas o nuevas funciones.</p>
             <p style="margin-bottom:1rem;"><strong>3. Con quién los compartimos.</strong> Con nadie sin tu consentimiento explícito. Si en el futuro habilitamos referidos a bancos, te pediremos autorización adicional.</p>
             <p style="margin-bottom:1rem;"><strong>4. Tus derechos (Ley 8968).</strong> Podés solicitar acceso, rectificación o eliminación de tus datos en cualquier momento escribiendo a <a href="mailto:privacidad@precali.net" style="color:var(--emerald);">privacidad@precali.net</a>.</p>
@@ -880,37 +903,29 @@
     if (e.key === 'Escape') window.cerrarModal();
   });
 
-  // Reescala los sliders cuando cambia la moneda, manteniendo proporción del valor.
-  // Por ejemplo: si tenías ingreso al 50% del slider en CRC (₡5,000,000), al cambiar a USD
-  // queda al 50% del nuevo rango (~$10,000).
-  function aplicarRangosMoneda(moneda, mantenerProporcion = true) {
+  // Ajusta límites y convierte los campos manuales cuando cambia la moneda.
+  function aplicarRangosMoneda(moneda, convertirValores = true) {
     const rangos = rangosParaMoneda(moneda);
-    const sliders = ['ingreso', 'deudas', 'prima'];
+    const campos = ['ingreso', 'deudas', 'prima'];
+    const tasa = tasaCambioActual();
 
-    sliders.forEach(name => {
+    campos.forEach(name => {
       const el = els[name];
       const r = rangos[name];
       if (!el) return;
 
-      let nuevoValor;
-      if (mantenerProporcion) {
-        // Calcular proporción actual (0-1) y aplicarla al nuevo rango
-        const valorActual = +el.value;
-        const minActual = +el.min;
-        const maxActual = +el.max;
-        const proporcion = maxActual > minActual ? (valorActual - minActual) / (maxActual - minActual) : 0;
-        nuevoValor = r.min + proporcion * (r.max - r.min);
-        // Redondear al step más cercano
+      let nuevoValor = Number(el.value) || 0;
+      if (convertirValores) {
+        nuevoValor = moneda === 'usd' ? nuevoValor / tasa : nuevoValor * tasa;
         nuevoValor = Math.round(nuevoValor / r.step) * r.step;
       } else {
         nuevoValor = r.def;
       }
 
-      // Aplicar nuevos atributos
       el.min = r.min;
       el.max = r.max;
       el.step = r.step;
-      el.value = Math.max(r.min, Math.min(r.max, nuevoValor));
+      el.value = Math.max(r.min, Math.min(r.max, Math.round(nuevoValor)));
     });
   }
 
@@ -938,7 +953,7 @@
     const cfg = CONFIG_TIPOS[tipoActual];
     const moneda = els.moneda.value;
 
-    // Detectar cambio de moneda y reescalar sliders ANTES de leer valores
+    // Detectar cambio de moneda y convertir campos manuales ANTES de leer valores
     if (moneda !== monedaAnterior) {
       aplicarRangosMoneda(moneda, true);
       monedaAnterior = moneda;
@@ -946,7 +961,7 @@
       ajustarPlazo();
     }
 
-    // Los valores del slider están EN LA MONEDA ACTIVA (no se convierten)
+    // Los valores están EN LA MONEDA ACTIVA (no se convierten)
     const valIngreso = +els.ingreso.value;
     const valDeudas = +els.deudas.value;
     const plazo = +els.plazo.value;
@@ -957,6 +972,7 @@
     els.oDeudas.textContent = fmt(valDeudas, moneda);
     els.oPlazo.textContent = plazo + (plazo === 1 ? ' año' : ' años');
     els.oPrima.textContent = fmt(valPrima, moneda);
+    actualizarAyudasMontos(moneda);
 
     if (!paisConDatos()) {
       const pais = getPais();

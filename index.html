@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Open+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700;1,800&family=Poppins:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260610-seguros1" />
+  <link rel="stylesheet" href="styles.css?v=20260611-seguros-credit-ui1" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
   <link rel="icon" type="image/webp" href="favicon.webp" />
@@ -166,7 +166,8 @@
                 <label>Ingreso mensual neto</label>
                 <span id="o-ingreso" class="field-value">₡1,200,000</span>
               </div>
-              <input type="range" id="ingreso" min="200000" max="10000000" step="100000" value="1200000" />
+              <input type="number" id="ingreso" class="input-text amount-input" min="0" max="10000000" step="100000" value="1200000" inputmode="numeric" />
+              <div id="h-ingreso" class="field-hint amount-helper">₡1 200 000 · 1.2 millones</div>
             </div>
 
             <div class="field">
@@ -174,7 +175,8 @@
                 <label>Deudas mensuales</label>
                 <span id="o-deudas" class="field-value">₡150,000</span>
               </div>
-              <input type="range" id="deudas" min="0" max="10000000" step="50000" value="150000" />
+              <input type="number" id="deudas" class="input-text amount-input" min="0" max="10000000" step="50000" value="150000" inputmode="numeric" />
+              <div id="h-deudas" class="field-hint amount-helper">₡150 000 · 150 mil</div>
             </div>
 
             <div class="field">
@@ -199,7 +201,8 @@
                 <label>Prima / enganche disponible</label>
                 <span id="o-prima" class="field-value">₡5,000,000</span>
               </div>
-              <input type="range" id="prima" min="0" max="50000000" step="500000" value="5000000" />
+              <input type="number" id="prima" class="input-text amount-input" min="0" max="50000000" step="500000" value="5000000" inputmode="numeric" />
+              <div id="h-prima" class="field-hint amount-helper">₡5 000 000 · 5 millones</div>
             </div>
           </div>
         </div>
@@ -472,10 +475,10 @@
     <span>Arriba</span>
   </button>
 
-  <script src="data.js?v=20260610-seguros1"></script>
-  <script src="data-aseguradoras.js?v=20260610-seguros1"></script>
-  <script src="app.js?v=20260610-seguros1"></script>
-  <script src="seguros.js?v=20260610-seguros1"></script>
+  <script src="data.js?v=20260611-seguros-credit-ui1"></script>
+  <script src="data-aseguradoras.js?v=20260611-seguros-credit-ui1"></script>
+  <script src="app.js?v=20260611-seguros-credit-ui1"></script>
+  <script src="seguros.js?v=20260611-seguros-credit-ui1"></script>
 </body>
 </html>
 
