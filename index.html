@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Open+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700;1,800&family=Poppins:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260611-seguros-credit-ui1" />
+  <link rel="stylesheet" href="styles.css?v=20260612-insurance-ui1" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
   <link rel="icon" type="image/webp" href="favicon.webp" />
@@ -66,7 +66,6 @@
       </a>
       <nav class="nav-links">
         <a href="#calculadora">Créditos</a>
-        <a href="#bancos">Bancos</a>
         <a href="#seguros">Seguros</a>
         <a href="#metodologia">Metodología</a>
         <a href="#contacto">Contacto</a>
@@ -279,10 +278,17 @@
             <div class="insurance-country-pill" id="insurance-country-pill">Costa Rica</div>
           </div>
 
+          <label class="tabs-label">Tipo de seguro</label>
           <div class="insurance-tabs" role="tablist" aria-label="Tipo de seguro">
-            <button type="button" class="insurance-tab active" data-insurance-type="auto">Auto</button>
-            <button type="button" class="insurance-tab" data-insurance-type="vida">Vida</button>
-            <button type="button" class="insurance-tab" data-insurance-type="salud">Salud</button>
+            <button type="button" class="insurance-tab active" data-insurance-type="auto">
+              <span class="tab-label">Vehículo</span>
+            </button>
+            <button type="button" class="insurance-tab" data-insurance-type="vida">
+              <span class="tab-label">Vida</span>
+            </button>
+            <button type="button" class="insurance-tab" data-insurance-type="salud">
+              <span class="tab-label">Salud</span>
+            </button>
           </div>
 
           <form id="insurance-form" class="insurance-form" autocomplete="off">
@@ -475,10 +481,10 @@
     <span>Arriba</span>
   </button>
 
-  <script src="data.js?v=20260611-seguros-credit-ui1"></script>
-  <script src="data-aseguradoras.js?v=20260611-seguros-credit-ui1"></script>
-  <script src="app.js?v=20260611-seguros-credit-ui1"></script>
-  <script src="seguros.js?v=20260611-seguros-credit-ui1"></script>
+  <script src="data.js?v=20260612-insurance-ui1"></script>
+  <script src="data-aseguradoras.js?v=20260612-insurance-ui1"></script>
+  <script src="app.js?v=20260612-insurance-ui1"></script>
+  <script src="seguros.js?v=20260612-insurance-ui1"></script>
 </body>
 </html>
 

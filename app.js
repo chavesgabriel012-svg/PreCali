@@ -69,6 +69,10 @@
     };
   }
 
+  function tasaCambioActual() {
+    return getPais().cambioUSD || TIPO_CAMBIO_USD;
+  }
+
   function fmt(v, mon) {
     const symbol = monedaInfo(mon).simbolo;
     return symbol + new Intl.NumberFormat('es-CR', { maximumFractionDigits: 0 }).format(Math.round(v));
@@ -907,7 +911,7 @@
   function aplicarRangosMoneda(moneda, convertirValores = true) {
     const rangos = rangosParaMoneda(moneda);
     const campos = ['ingreso', 'deudas', 'prima'];
-    const tasa = tasaCambioActual();
+    const tasa = convertirValores ? tasaCambioActual() : 1;
 
     campos.forEach(name => {
       const el = els[name];
