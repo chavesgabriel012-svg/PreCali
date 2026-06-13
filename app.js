@@ -228,6 +228,25 @@
     return 'cr';
   }
 
+
+  function avisoLegalPais() {
+    const avisos = typeof AVISOS_LEGALES !== 'undefined' ? AVISOS_LEGALES : {};
+    return avisos[paisActual] || avisos.cr || {};
+  }
+
+  function renderAvisosLegales() {
+    const pais = getPais();
+    const legal = avisoLegalPais();
+    const creditNotice = $('credit-legal-notice');
+    if (creditNotice && legal.creditos) {
+      creditNotice.innerHTML = `<strong>Aviso legal (${pais.nombre}):</strong> ${legal.creditos} ${legal.privacidad || ''} Esta herramienta es informativa y no constituye oferta vinculante. Al usar PreCali aceptás los <a href="terminos.html">Términos y Condiciones</a> y la <a href="privacidad.html">Política de Privacidad</a>.`;
+    }
+    const insuranceNotice = $('insurance-legal-notice');
+    if (insuranceNotice && legal.seguros) {
+      insuranceNotice.innerHTML = `<strong>Aviso legal de seguros (${pais.nombre}):</strong> ${legal.seguros} ${legal.privacidad || ''}`;
+    }
+  }
+
   function renderPais() {
     const pais = getPais();
     if (els.paisBandera) els.paisBandera.textContent = pais.bandera;
@@ -254,6 +273,7 @@
         monedaAnterior = 'crc';
       }
     }
+    renderAvisosLegales();
   }
 
   function cambiarPais(nuevoPais) {
@@ -544,7 +564,7 @@
           ? ` Sin embargo, su cuota baja se compensa con un plazo más largo: terminás pagando <strong>${fmt(ganador.total - porTotal[0].total, moneda)}</strong> más que con ${porTotal[0].banco.nombre}.`
           : '';
         return {
-          icon: '₡',
+          icon: monedaInfo(moneda).simbolo,
           title: 'Análisis: cuota mensual más baja',
           text: `Para tu prioridad de <strong>cuota mensual baja</strong>, la mejor opción es <strong>${ganador.banco.nombre}</strong> con una cuota de <strong>${fmt(ganador.cuota, moneda)}</strong>. Eso es <strong>${diffPct}%</strong> menos que ${ultimo.banco.nombre}, liberándote <strong>${fmt(diff, moneda)}</strong> mensuales para otros gastos.${trampa}`,
           meta: [

@@ -10,6 +10,48 @@ const PAISES = [
   { id: 'pa', nombre: 'Panamá', bandera: '🇵🇦', moneda: 'USD/PAB', simbolo: '$', cambioUSD: 1, estado: 'activo', bancos: 5 }
 ];
 
+
+
+
+
+const AVISOS_LEGALES = {
+  cr: {
+    creditos: 'Estimación referencial basada en información pública de bancos y cooperativas supervisadas. La aprobación final, monto y tasa dependen del análisis de cada entidad, historial crediticio, capacidad de pago, garantía y políticas internas. En Costa Rica pueden aplicar consultas al CIC/SUGEF cuando la entidad autorizada evalúe formalmente el crédito.',
+    seguros: 'Estimación orientativa basada en información pública del mercado asegurador costarricense. El precio final, deducibles, exclusiones y aceptación los confirma cada aseguradora o intermediario autorizado bajo la supervisión de SUGESE. PreCali no emite pólizas ni sustituye una cotización oficial.',
+    privacidad: 'Los datos personales deben tratarse conforme a la Ley 8968 y al consentimiento del usuario; PreCali muestra comparaciones informativas y no constituye una oferta vinculante.'
+  },
+  mx: {
+    creditos: 'Estimación referencial para México basada en información pública. La aprobación final depende de la institución financiera, análisis crediticio, capacidad de pago y, cuando corresponda, consulta a Sociedades de Información Crediticia conforme a la regulación aplicable.',
+    seguros: 'Estimación orientativa basada en información pública de aseguradoras y referencias de mercado. La prima exacta, coberturas, deducibles y exclusiones las confirma la aseguradora autorizada por CNSF; CONDUSEF es la autoridad de atención y defensa del usuario financiero.',
+    privacidad: 'El tratamiento de datos personales requiere consentimiento y debe atender la legislación mexicana de protección de datos; PreCali no es una institución financiera ni aseguradora.'
+  },
+  gt: {
+    creditos: 'Estimación referencial para Guatemala. La aprobación final depende de la entidad financiera, políticas internas, capacidad de pago y reportes crediticios autorizados cuando apliquen. La supervisión del sistema financiero corresponde a la SIB.',
+    seguros: 'Estimación orientativa para Guatemala con información pública y rangos de mercado. La prima final, condiciones, deducibles y exclusiones los define la aseguradora autorizada y supervisada por la SIB.',
+    privacidad: 'El usuario debe autorizar cualquier tratamiento o verificación de datos. PreCali informa y compara; no otorga crédito ni emite pólizas.'
+  },
+  sv: {
+    creditos: 'Estimación referencial para El Salvador. La aprobación final depende de bancos o entidades financieras supervisadas por la SSF, su política de riesgo, capacidad de pago y validaciones crediticias autorizadas.',
+    seguros: 'Estimación orientativa en USD para El Salvador. Las condiciones finales, prima, exclusiones y aceptación las confirma cada aseguradora autorizada y supervisada por la SSF.',
+    privacidad: 'Cualquier consulta o envío de datos requiere autorización del usuario. PreCali no representa aprobación, oferta vinculante ni intermediación de seguros.'
+  },
+  hn: {
+    creditos: 'Estimación referencial para Honduras. La aprobación final depende de la entidad financiera, capacidad de pago, historial y políticas internas bajo el marco de supervisión de la CNBS.',
+    seguros: 'Estimación orientativa para Honduras basada en rangos públicos de mercado. La prima final y las condiciones contractuales las determina la aseguradora autorizada bajo supervisión de la CNBS.',
+    privacidad: 'El usuario debe autorizar el uso de sus datos. PreCali funciona como comparador informativo y no como banco, aseguradora o corredor.'
+  },
+  ni: {
+    creditos: 'Estimación referencial para Nicaragua. La aprobación formal depende de la entidad financiera, capacidad de pago, historial y políticas internas bajo el marco de supervisión de SIBOIF cuando aplique.',
+    seguros: 'Estimación orientativa para Nicaragua. El precio final, coberturas, deducibles y exclusiones los confirma cada aseguradora autorizada en el mercado local.',
+    privacidad: 'PreCali requiere consentimiento para tratar datos del usuario y no constituye oferta vinculante, aprobación de crédito ni emisión de póliza.'
+  },
+  pa: {
+    creditos: 'Estimación referencial para Panamá. La aprobación final depende del banco o entidad financiera, su análisis de riesgo, capacidad de pago e información crediticia autorizada bajo el marco regulatorio aplicable.',
+    seguros: 'Estimación orientativa en USD/PAB para Panamá. La prima exacta, coberturas y exclusiones las confirma cada aseguradora autorizada y supervisada por la Superintendencia de Seguros y Reaseguros de Panamá.',
+    privacidad: 'El tratamiento de datos personales debe atender el consentimiento del usuario y la Ley 81 de protección de datos personales. PreCali no es oferta vinculante.'
+  }
+};
+
 // Datos de bancos costarricenses
 // Fuente: sitios oficiales de cada banco, vigentes a enero 2026
 // Para actualizar: revisar URLs oficiales y modificar tasas/plazos según corresponda

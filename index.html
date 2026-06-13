@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PreCali — Compará préstamos de bancos costarricenses</title>
+  <title>PreCali — Compará créditos y seguros por país</title>
   <meta name="description" content="Pre-calificador financiero independiente. Compará préstamos personales, vehiculares e hipotecas entre los principales bancos de Costa Rica usando información pública oficial." />
   <meta name="keywords" content="préstamos Costa Rica, hipoteca, crédito vehicular, simulador, comparador bancos, BAC, BCR, Banco Nacional, Banco Popular, Davivienda, DaviBank, pre-calificación financiera" />
   <meta name="author" content="PreCali" />
@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Open+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700;1,800&family=Poppins:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260612-insurance-ui1" />
+  <link rel="stylesheet" href="styles.css?v=20260612-insurance-legal2" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
   <link rel="icon" type="image/webp" href="favicon.webp" />
@@ -141,7 +141,7 @@
 
     <section id="calculadora" class="calculator-section">
       <div class="container">
-        <div class="section-eyebrow">Paso 01</div>
+        <div class="section-eyebrow">Créditos</div>
         <h2 class="section-title">Tu situación financiera</h2>
         <p class="section-sub">Ajustá los controles según tu realidad actual. Todo lo que ingresás se procesa localmente, no se almacena.</p>
 
@@ -207,7 +207,7 @@
         </div>
 
         <div id="bancos" class="anchor-scroll"></div>
-        <div class="section-eyebrow" style="margin-top: 2.5rem;">Paso 02</div>
+        <div class="section-eyebrow" style="margin-top: 2.5rem;">Entidades financieras</div>
         <h2 class="section-title">Bancos a comparar</h2>
         <p class="section-sub">Seleccioná las entidades que te interesan. Cada banco tiene su propia política de tasa, plazo y capacidad de pago.</p>
 
@@ -244,7 +244,7 @@
           </div>
         </div>
 
-        <div class="section-eyebrow" style="margin-top: 2.5rem;">Paso 03</div>
+        <div class="section-eyebrow" style="margin-top: 2.5rem;">Comparativa de créditos</div>
         <div class="results-header">
           <h2 class="section-title">Resultados</h2>
           <select id="orden" class="select select-sm">
@@ -257,7 +257,7 @@
 
         <div id="results"></div>
 
-        <div class="disclaimer-box">
+        <div id="credit-legal-notice" class="disclaimer-box">
           <strong>Aviso legal:</strong> Estimación referencial basada en información pública de los bancos. La aprobación final, monto y tasa exacta dependen del análisis crediticio de cada entidad (CIC, scoring SUGEF, antigüedad laboral). Esta herramienta no constituye una oferta vinculante. Al usar PreCali aceptás los <a href="terminos.html">Términos y Condiciones</a> y la <a href="privacidad.html">Política de Privacidad</a>.
         </div>
       </div>
@@ -265,7 +265,7 @@
 
     <section id="seguros" class="insurance-section">
       <div class="container">
-        <div class="section-eyebrow">Paso 04</div>
+        <div class="section-eyebrow">Seguros</div>
         <h2 class="section-title">Compará seguros sin adivinar</h2>
         <p class="section-sub">PreCali estima rangos de prima usando variables reales de cotizadores: valor del bien, edad, cobertura, deducible, zona y país. No reemplaza la cotización oficial, pero te ayuda a saber qué opción vale la pena revisar primero.</p>
 
@@ -377,7 +377,7 @@
             </div>
           </form>
 
-          <div class="insurance-disclaimer"><strong>Estimación orientativa:</strong> las aseguradoras usan tablas actuariales privadas. PreCali aproxima rangos con información pública y variables típicas de cotizadores oficiales; el precio final lo confirma cada aseguradora.</div>
+          <div id="insurance-legal-notice" class="insurance-disclaimer"><strong>Estimación orientativa:</strong> las aseguradoras usan tablas actuariales privadas. PreCali aproxima rangos con información pública y variables típicas de cotizadores oficiales; el precio final lo confirma cada aseguradora.</div>
         </div>
 
         <div class="insurance-results-head">
@@ -481,10 +481,10 @@
     <span>Arriba</span>
   </button>
 
-  <script src="data.js?v=20260612-insurance-ui1"></script>
-  <script src="data-aseguradoras.js?v=20260612-insurance-ui1"></script>
-  <script src="app.js?v=20260612-insurance-ui1"></script>
-  <script src="seguros.js?v=20260612-insurance-ui1"></script>
+  <script src="data.js?v=20260612-insurance-legal2"></script>
+  <script src="data-aseguradoras.js?v=20260612-insurance-legal2"></script>
+  <script src="app.js?v=20260612-insurance-legal2"></script>
+  <script src="seguros.js?v=20260612-insurance-legal2"></script>
 </body>
 </html>
 

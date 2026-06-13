@@ -93,6 +93,20 @@
     };
   }
 
+
+  function avisoLegalSeguro() {
+    const avisos = typeof AVISOS_LEGALES !== 'undefined' ? AVISOS_LEGALES : {};
+    return avisos[paisId()] || avisos.cr || {};
+  }
+
+  function renderAvisoLegalSeguro() {
+    const target = $('insurance-legal-notice');
+    const legal = avisoLegalSeguro();
+    if (target && legal.seguros) {
+      target.innerHTML = `<strong>Aviso legal de seguros (${pais().nombre}):</strong> ${legal.seguros} ${legal.privacidad || ''}`;
+    }
+  }
+
   function fmt(v, m = moneda()) {
     const value = Math.max(0, Math.round(Number(v) || 0));
     const formatted = new Intl.NumberFormat('es-CR', { maximumFractionDigits: 0 }).format(value);
@@ -114,20 +128,20 @@
 
   function textoSeguro(value) {
     return String(value || '')
-      .replace(/Ã¡/g, 'á')
-      .replace(/Ã©/g, 'é')
-      .replace(/Ã­/g, 'í')
-      .replace(/Ã³/g, 'ó')
-      .replace(/Ãº/g, 'ú')
-      .replace(/Ã±/g, 'ñ')
+      .replace(/á/g, 'á')
+      .replace(/é/g, 'é')
+      .replace(/í/g, 'í')
+      .replace(/ó/g, 'ó')
+      .replace(/ú/g, 'ú')
+      .replace(/ñ/g, 'ñ')
       .replace(/Ã/g, 'Á')
-      .replace(/Ã‰/g, 'É')
+      .replace(/É/g, 'É')
       .replace(/Ã/g, 'Í')
-      .replace(/Ã“/g, 'Ó')
-      .replace(/Ãš/g, 'Ú')
-      .replace(/Ã‘/g, 'Ñ')
-      .replace(/â‚¡/g, '₡')
-      .replace(/Â·/g, '·');
+      .replace(/Ó/g, 'Ó')
+      .replace(/Ú/g, 'Ú')
+      .replace(/Ñ/g, 'Ñ')
+      .replace(/₡/g, '₡')
+      .replace(/·/g, '·');
   }
 
   function aseguradoras() {
@@ -199,7 +213,7 @@
 
     return build(a, valor * (tasas[0] / 100) * factor, valor * (tasas[1] / 100) * factor, {
       frecuencia: 'anual',
-      productoLabel: 'Seguro de auto',
+      productoLabel: 'Seguro de vehículo',
       resumenCorto: coberturaTexto,
       detalle: `${coberturaTexto} · ${anio} · ${els.autoUso.options[els.autoUso.selectedIndex].text}`,
       variables: ['valor del vehículo', 'año', 'cobertura', 'zona', 'edad del conductor', 'uso'],
@@ -268,6 +282,7 @@
 
   function renderLabels() {
     const m = moneda();
+    renderAvisoLegalSeguro();
     if (els.countryPill) els.countryPill.textContent = `${pais().nombre} · ${m.codigo}`;
     if (els.autoValorLabel) els.autoValorLabel.textContent = fmt(els.autoValor.value, m);
     if (els.autoAnioLabel) els.autoAnioLabel.textContent = `${els.autoAnio.value || YEAR}`;
@@ -358,17 +373,17 @@
     const rating = r.aseguradora.rating ? `${r.aseguradora.rating}/10` : 'No disponible';
 
     els.modalHost.innerHTML = `
-      <div class="modal-overlay" onclick="if(event.target===this) cerrarModal()">
-        <div class="modal-content">
+      <div class="modal-overlay" onclick="cerrarModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
           <div class="modal-header">
             <div class="modal-header-info">
               <div class="bank-logo" style="background:${r.aseguradora.color};">${r.aseguradora.iniciales}</div>
               <div>
                 <div class="modal-header-name">${nombre}</div>
-                <div class="modal-header-tag">${r.meta.productoLabel} · ${pais().nombre}</div>
+                <div class="modal-header-tag">${r.meta.productoLabel} · ${pais().nombre} · ${m.codigo}</div>
               </div>
             </div>
-            <button class="modal-close" onclick="cerrarModal()" aria-label="Cerrar">×</button>
+            <button class="modal-close" onclick="cerrarModal(event)" aria-label="Cerrar">×</button>
           </div>
 
           <div class="modal-section-title">Tu estimación</div>
@@ -381,11 +396,25 @@
             <div class="modal-row"><span class="label">Rating / fortaleza</span><span class="val">${rating}</span></div>
           </div>
 
+          <div class="modal-section-title">Condiciones de la aseguradora</div>
+          <div class="modal-table">
+            <div class="modal-row"><span class="label">Moneda</span><span class="val">${m.codigo}</span></div>
+            <div class="modal-row"><span class="label">Frecuencia</span><span class="val">${r.meta.frecuencia === 'mensual' ? 'Mensual' : 'Anual'}</span></div>
+            <div class="modal-row"><span class="label">Cotizador oficial</span><span class="val">Disponible</span></div>
+            <div class="modal-row"><span class="label">Fuente</span><span class="val">Información pública</span></div>
+          </div>
+
           <div class="modal-section-title">Variables usadas</div>
+          <div class="modal-requisitos-intro">
+            <strong>PreCali estima con las variables principales que piden los cotizadores.</strong>
+            El precio final puede cambiar por historial, zona exacta, deducible, exclusiones, inspección y evaluación oficial.
+          </div>
           <div class="modal-requisitos">
-            <div class="modal-requisito-grupo">
-              <div class="modal-requisito-title">Perfil del seguro</div>
-              ${r.meta.variables.map(v => `<div class="modal-requisito-item"><span class="check">✓</span>${v}</div>`).join('')}
+            <div class="requisitos-grupo">
+              <div class="requisitos-categoria">Perfil del seguro</div>
+              <ul class="requisitos-lista">
+                ${r.meta.variables.map(v => `<li>${v}</li>`).join('')}
+              </ul>
             </div>
           </div>
 
@@ -396,10 +425,15 @@
             <p><em>${r.nota}</em></p>
           </div>
 
+          <div class="modal-section-title">Aviso legal en ${pais().nombre}</div>
+          <div class="modal-glosario">
+            <p>${avisoLegalSeguro().seguros || 'Estimación orientativa. El precio final lo confirma la aseguradora.'}</p>
+          </div>
+
           <div class="modal-actions">
             <a href="${r.cotizador}" target="_blank" rel="noopener" class="modal-link-official">Ir al cotizador oficial</a>
             <button class="modal-btn-email" onclick="abrirEmailSeguro(${idx})">Enviármelo por email</button>
-            <button class="modal-btn-cancel" onclick="cerrarModal()">Cerrar</button>
+            <button class="modal-btn-cancel" onclick="cerrarModal(event)">Cerrar</button>
           </div>
           <div class="modal-source">Las primas son orientativas. PreCali no intermedia contratos de seguros.</div>
         </div>
@@ -414,14 +448,14 @@
     const m = moneda();
 
     els.modalHost.innerHTML = `
-      <div class="modal-overlay" onclick="if(event.target===this) cerrarModal()">
-        <div class="modal-content modal-email">
+      <div class="modal-overlay" onclick="cerrarModal(event)">
+        <div class="modal modal-email" onclick="event.stopPropagation()">
           <div class="modal-header">
             <div>
               <div class="modal-header-name">Enviar estimación por email</div>
               <div class="modal-header-tag">${nombre} · ${rangeLabel(r, m)}</div>
             </div>
-            <button class="modal-close" onclick="cerrarModal()" aria-label="Cerrar">×</button>
+            <button class="modal-close" onclick="cerrarModal(event)" aria-label="Cerrar">×</button>
           </div>
 
           <form id="seg-lead-form" onsubmit="event.preventDefault(); enviarEmailSeguro(${idx});">
@@ -444,7 +478,7 @@
               <span>Acepto recibir esta estimación por correo y entiendo que es orientativa.</span>
             </label>
             <button id="seg-lead-submit" class="modal-btn-email" type="submit" disabled>Enviar estimación</button>
-            <button class="modal-btn-cancel" type="button" onclick="cerrarModal()">Cancelar</button>
+            <button class="modal-btn-cancel" type="button" onclick="cerrarModal(event)">Cancelar</button>
           </form>
         </div>
       </div>
@@ -501,20 +535,20 @@
   function mostrarConfirmacionSeguro(nombre, email, r) {
     if (!els.modalHost) return;
     els.modalHost.innerHTML = `
-      <div class="modal-overlay" onclick="if(event.target===this) cerrarModal()">
-        <div class="modal-content modal-email">
+      <div class="modal-overlay" onclick="cerrarModal(event)">
+        <div class="modal modal-email" onclick="event.stopPropagation()">
           <div class="modal-header">
             <div>
               <div class="modal-header-name">Estimación enviada</div>
               <div class="modal-header-tag">${textoSeguro(r.aseguradora.nombre)}</div>
             </div>
-            <button class="modal-close" onclick="cerrarModal()" aria-label="Cerrar">×</button>
+            <button class="modal-close" onclick="cerrarModal(event)" aria-label="Cerrar">×</button>
           </div>
           <div class="modal-glosario">
             <p><strong>Listo, ${nombre}.</strong> Registramos la solicitud para enviar la estimación a <strong>${email}</strong>.</p>
             <p>Recordá que el precio final lo confirma la aseguradora con su cotizador oficial.</p>
           </div>
-          <button class="modal-btn-email" onclick="cerrarModal()">Cerrar</button>
+          <button class="modal-btn-email" onclick="cerrarModal(event)">Cerrar</button>
         </div>
       </div>
     `;
