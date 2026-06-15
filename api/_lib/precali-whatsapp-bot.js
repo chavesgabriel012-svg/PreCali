@@ -30,14 +30,57 @@ const BANKS = [
     name: "Lafise",
     vehiculo: { rate: 10.5, maxYears: 7, ratio: 0.4, minIncome: 600000, minAmount: 2000000, finance: 0.85 },
     personal: { rate: 24.0, maxYears: 5, ratio: 0.35, minIncome: 500000, minAmount: 500000 },
+    hipoteca: { rate: 10.0, maxYears: 30, ratio: 0.35, minIncome: 700000, minAmount: 8000000, finance: 0.8 },
   },
 ];
+
+const AMOUNT_PATTERN = /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/;
 
 function normalize(text) {
   return String(text || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function normalizeAmountWords(text) {
+  const millions = {
+    medio: 0.5,
+    media: 0.5,
+    un: 1,
+    uno: 1,
+    una: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4,
+    cinco: 5,
+    seis: 6,
+    siete: 7,
+    ocho: 8,
+    nueve: 9,
+    diez: 10,
+  };
+  const thousands = {
+    cien: 100,
+    ciento: 100,
+    doscientos: 200,
+    trescientos: 300,
+    cuatrocientos: 400,
+    quinientos: 500,
+    seiscientos: 600,
+    setecientos: 700,
+    ochocientos: 800,
+    novecientos: 900,
+  };
+
+  let result = text;
+  for (const [word, value] of Object.entries(millions)) {
+    result = result.replace(new RegExp("\\b" + word + "\\s+millones?\\b", "g"), value + " millones");
+  }
+  for (const [word, value] of Object.entries(thousands)) {
+    result = result.replace(new RegExp("\\b" + word + "\\s+mil\\b", "g"), value + " mil");
+  }
+  return result;
 }
 
 function money(value) {
@@ -47,11 +90,13 @@ function money(value) {
 
 function parseAmount(raw) {
   if (!raw) return 0;
-  const cleaned = String(raw).toLowerCase().replace(/[,\s]/g, "");
-  const number = Number(cleaned.replace(/[^\d.]/g, ""));
+
+  const compact = String(raw).toLowerCase().replace(/[,\s]/g, "");
+  const number = Number(compact.replace(/[^\d.]/g, ""));
   if (!Number.isFinite(number)) return 0;
-  if (/millones|millon|m\b/.test(cleaned)) return number * 1000000;
-  if (/mil|k\b/.test(cleaned)) return number * 1000;
+
+  if (/millones|millon|mill|m\b/.test(compact)) return number * 1000000;
+  if (/mil|k\b/.test(compact)) return number * 1000;
   return number;
 }
 
@@ -63,38 +108,84 @@ function findAmount(text, patterns) {
   return 0;
 }
 
+function amountAfter(text, labels, blockers) {
+  for (const label of labels) {
+    const matcher = new RegExp("\\b(?:" + label + ")\\b", "g");
+    let labelMatch;
+
+    while ((labelMatch = matcher.exec(text))) {
+      const segment = text.slice(labelMatch.index + labelMatch[0].length, labelMatch.index + labelMatch[0].length + 60);
+      const amountMatch = segment.match(AMOUNT_PATTERN);
+      if (!amountMatch) continue;
+
+      const beforeAmount = segment.slice(0, amountMatch.index || 0);
+      const blocked = blockers.some((blocker) => new RegExp("\\b(?:" + blocker + ")\\b").test(beforeAmount));
+      if (!blocked) return parseAmount(amountMatch[1]);
+    }
+  }
+
+  return 0;
+}
+
 function detectProduct(text) {
-  if (/(casa|vivienda|hipoteca|hipotecario|apartamento|lote|propiedad)/.test(text)) return "hipoteca";
-  if (/(carro|auto|vehiculo|vehicular|moto|prendario)/.test(text)) return "vehiculo";
+  if (/(casa|vivienda|hipoteca|hipotecario|apartamento|apto|lote|terreno|propiedad|inmueble)/.test(text)) {
+    return "hipoteca";
+  }
+  if (/(carro|auto|vehiculo|veiculo|vehicular|moto|prendario|pickup|pick up|camioneta)/.test(text)) {
+    return "vehiculo";
+  }
   return "personal";
 }
 
 function parseProfile(body) {
-  const text = normalize(body);
-  const income = findAmount(text, [
-    /(?:gano|ingreso|salario|sueldo|neto|mensual)\D{0,18}([\d.,]+(?:\s*(?:millones|millon|mil|k|m))?)/,
-    /([\d.,]+(?:\s*(?:millones|millon|mil|k|m))?)\s*(?:de ingreso|de salario|netos|mensuales)/,
-  ]);
-  const debt = findAmount(text, [
-    /(?:debo|deuda|deudas|pago|pagos)\D{0,18}([\d.,]+(?:\s*(?:millones|millon|mil|k|m))?)/,
-    /([\d.,]+(?:\s*(?:millones|millon|mil|k|m))?)\s*(?:de deuda|en deudas|de pagos)/,
-  ]);
-  const downPayment = findAmount(text, [
-    /(?:prima|enganche|aporte)\D{0,18}([\d.,]+(?:\s*(?:millones|millon|mil|k|m))?)/,
-  ]);
-  const assetValue = findAmount(text, [
-    /(?:carro|auto|vehiculo|casa|vivienda|propiedad|monto|valor|quiero|ocupo)\D{0,22}([\d.,]+(?:\s*(?:millones|millon|mil|k|m))?)/,
-  ]);
-  const yearsMatch = text.match(/(\d{1,2})\s*(?:anos|año|anios|meses|plazo)/);
-  const requestedYears = yearsMatch ? Number(yearsMatch[1]) : 6;
+  const text = normalizeAmountWords(normalize(body));
+  const product = detectProduct(text);
+
+  const income =
+    amountAfter(
+      text,
+      ["gano", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo"],
+      ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
+    ) ||
+    findAmount(text, [
+      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de ingreso|de salario|netos|mensuales)/,
+    ]);
+
+  const debt =
+    amountAfter(
+      text,
+      ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos"],
+      ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
+    ) ||
+    findAmount(text, [
+      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de deuda|en deudas|de pagos|en pagos)/,
+    ]);
+
+  const downPayment =
+    amountAfter(
+      text,
+      ["prima", "enganche", "aporte"],
+      ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "gano", "ingreso", "salario", "sueldo", "monto", "valor"]
+    ) || 0;
+
+  const assetValue =
+    amountAfter(
+      text,
+      ["valor", "monto", "casa", "vivienda", "propiedad", "apartamento", "apto", "lote", "terreno", "carro", "auto", "vehiculo", "veiculo", "prestamo", "credito", "financiar", "financiamiento", "ocupo", "necesito", "nesesito"],
+      ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte"]
+    );
+
+  const yearsMatch = text.match(/(\d{1,2})\s*(?:anos|ano|anios|meses|plazo)/);
+  const defaultYears = product === "hipoteca" ? 30 : product === "personal" ? 5 : 6;
+  const requestedYears = yearsMatch ? Number(yearsMatch[1]) : defaultYears;
 
   return {
-    product: detectProduct(text),
+    product,
     income,
     debt,
     downPayment,
     assetValue,
-    requestedYears: Math.max(1, Math.min(requestedYears || 6, 30)),
+    requestedYears: Math.max(1, Math.min(requestedYears || defaultYears, 30)),
   };
 }
 
@@ -129,11 +220,7 @@ function simulate(profile) {
       amount = Math.min(amount, financeLimit, requested || financeLimit);
     }
 
-    const qualifies =
-      profile.income >= condition.minIncome &&
-      amount >= condition.minAmount &&
-      capacity > 0;
-
+    const qualifies = profile.income >= condition.minIncome && amount >= condition.minAmount && capacity > 0;
     if (!qualifies) continue;
 
     const payment = paymentFor(amount, condition.rate, years);
@@ -153,34 +240,36 @@ function simulate(profile) {
 function missingProfileMessage(profile) {
   const missing = [];
   if (!profile.income) missing.push("ingreso mensual");
-  if (!profile.assetValue && profile.product !== "personal") missing.push("valor del bien");
   if (missing.length === 0) return "";
 
   return [
     "Para calcularte bien necesito: " + missing.join(", ") + ".",
     "Ejemplo:",
     "Gano 1500000, debo 250000, quiero vehiculo de 15000000, tengo 2000000 de prima, a 6 anos.",
+    "Tambien podes decir: gano 2 millones, debo 400 mil y quiero prestamo para casa.",
   ].join("\n");
 }
 
-function formatResults(profile, results) {
-  const title =
-    profile.product === "hipoteca"
-      ? "credito hipotecario"
-      : profile.product === "vehiculo"
-        ? "credito vehicular"
-        : "credito personal";
+function productTitle(product) {
+  if (product === "hipoteca") return "credito hipotecario";
+  if (product === "vehiculo") return "credito vehicular";
+  return "credito personal";
+}
 
+function formatResults(profile, results) {
   const lines = [
     "PreCali - comparativa preliminar",
-    "Producto: " + title,
+    "Producto: " + productTitle(profile.product),
     "Ingreso: " + money(profile.income) + " | Deudas: " + money(profile.debt),
+    profile.assetValue
+      ? "Valor de referencia: " + money(profile.assetValue) + (profile.downPayment ? " | Prima: " + money(profile.downPayment) : "")
+      : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
     "",
   ];
 
   if (!results.length) {
     lines.push("Con esos datos no encontre una opcion clara.");
-    lines.push("Probemos bajando monto, subiendo prima o revisando deudas mensuales.");
+    lines.push("Probemos bajando monto, subiendo prima, ampliando plazo o revisando deudas mensuales.");
     return lines.join("\n");
   }
 
@@ -188,7 +277,7 @@ function formatResults(profile, results) {
     lines.push(
       `${index + 1}. ${result.bank}`,
       `Tasa: ${result.rate.toFixed(2)}% | Plazo: ${result.years} anos`,
-      `Monto estimado: ${money(result.amount)}`,
+      `${profile.assetValue ? "Monto financiado" : "Monto maximo estimado"}: ${money(result.amount)}`,
       `Cuota aprox: ${money(result.payment)}`,
       ""
     );
@@ -207,23 +296,26 @@ function buildReply(input) {
   if (numMedia > 0) {
     return {
       message:
-        "Recibi tu documento. En este MVP por WhatsApp ya puedo guardar el flujo, pero necesito que me escribas los datos clave para calcular: ingreso mensual, deudas, monto del vehiculo/casa o monto que ocupas, prima y plazo.",
+        "Recibi tu documento. En este MVP por WhatsApp todavia no leo el archivo completo, pero ya podemos continuar si me escribis ingreso mensual, deudas, monto aproximado, prima y plazo.",
     };
   }
 
-  if (!text || /^(hola|buenas|menu|ayuda|inicio|empezar)/.test(text)) {
+  if (!text || /^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)/.test(text)) {
     return {
       message: [
         "Hola, soy PreCali por WhatsApp.",
         "Mandame tus datos y te comparo opciones en segundos.",
         "",
-        "Ejemplo:",
+        "Ejemplo carro:",
         "Gano 1500000, debo 250000, quiero vehiculo de 15000000, tengo 2000000 de prima, a 6 anos.",
+        "",
+        "Ejemplo casa:",
+        "Gano 2 millones, debo 400 mil y quiero prestamo para casa.",
       ].join("\n"),
     };
   }
 
-  if (/(aplicar|solicitar|me interesa|quiero esa|enviar)/.test(text)) {
+  if (/(aplicar|solicitar|me interesa|quiero esa|enviar|mandar|banco)/.test(text) && !/(gano|ingreso|salario|sueldo)/.test(text)) {
     return {
       message: [
         "Perfecto. Para aplicar normalmente necesitarias:",
