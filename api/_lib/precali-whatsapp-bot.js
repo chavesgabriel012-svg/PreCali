@@ -83,6 +83,19 @@ function normalizeAmountWords(text) {
   return result;
 }
 
+function normalizeTypos(text) {
+  return text
+    .replace(/\bkiero\b/g, "quiero")
+    .replace(/\bqiero\b/g, "quiero")
+    .replace(/\bnesecito\b/g, "necesito")
+    .replace(/\bnesesito\b/g, "necesito")
+    .replace(/\bkasa\b/g, "casa")
+    .replace(/\bveiculo\b/g, "vehiculo")
+    .replace(/\bveiculos\b/g, "vehiculos")
+    .replace(/\bpreztamo\b/g, "prestamo")
+    .replace(/\bhipotekario\b/g, "hipotecario");
+}
+
 function money(value) {
   const rounded = Math.max(0, Math.round(Number(value) || 0));
   return "CRC " + rounded.toLocaleString("es-CR");
@@ -138,7 +151,7 @@ function detectProduct(text) {
 }
 
 function parseProfile(body) {
-  const text = normalizeAmountWords(normalize(body));
+  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const product = detectProduct(text);
 
   const income =
@@ -154,7 +167,7 @@ function parseProfile(body) {
   const debt =
     amountAfter(
       text,
-      ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos"],
+      ["debo", "debemos", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos"],
       ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
     ) ||
     findAmount(text, [
@@ -290,7 +303,7 @@ function formatResults(profile, results) {
 
 function buildReply(input) {
   const body = input && input.body ? String(input.body) : "";
-  const text = normalize(body);
+  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
 
   if (numMedia > 0) {
@@ -311,6 +324,17 @@ function buildReply(input) {
         "",
         "Ejemplo casa:",
         "Gano 2 millones, debo 400 mil y quiero prestamo para casa.",
+      ].join("\n"),
+    };
+  }
+
+  if (/(pdf|documento|orden|patronal|boleta|colilla|foto|imagen|adjunto|archivo)/.test(text) && !/(gano|ingreso|salario|sueldo|neto)/.test(text)) {
+    return {
+      message: [
+        "Si ya tenes el documento, mandalo como archivo o foto por este chat.",
+        "En este MVP todavia no lo leo completo, pero ya estamos preparando IA/OCR para extraer ingreso, cedula y patrono automaticamente.",
+        "",
+        "Mientras tanto, podes escribirme: gano 1500000, debo 250000, quiero casa o carro.",
       ].join("\n"),
     };
   }
