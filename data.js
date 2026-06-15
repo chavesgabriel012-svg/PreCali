@@ -817,7 +817,7 @@ const BANCOS = [
       requisitos: [
         { categoria: 'Identificacion', items: ['Documento de identidad vigente', 'Licencia o datos del solicitante segun politica'] },
         { categoria: 'Demostracion de ingresos', items: ['Carta de trabajo o comprobante de ingresos', 'Ficha de seguro social o talonarios recientes', 'Estados de cuenta bancarios'] },
-        { categoria: 'Vehiculo', items: ['Cotizacion o factura proforma', 'Seguro de auto requerido durante la vigencia', 'Para usados: revision y antiguedad segun politica'] }
+        { categoria: 'Vehiculo', items: ['Cotizacion o factura proforma', 'Seguro vehicular requerido durante la vigencia', 'Para usados: revision y antiguedad segun politica'] }
       ]
     },
     hipoteca: {

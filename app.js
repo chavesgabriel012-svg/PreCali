@@ -1008,7 +1008,7 @@
             <div class="market-pending-flag">${pais.bandera}</div>
             <div>
               <div class="no-calif-title">${pais.nombre} todavía está en validación</div>
-              <div class="no-calif-sub">PreCali ya reconoce este país, pero no calcula préstamos ahí hasta cargar bancos y fuentes oficiales. Costa Rica sigue siendo el mercado activo.</div>
+              <div class="no-calif-sub">PreCali ya reconoce este país, pero este producto todavía no está activo hasta cargar entidades y fuentes oficiales.</div>
             </div>
           </div>
           <div class="no-calif-foot">
