@@ -300,9 +300,9 @@ body {
   grid-template-rows: repeat(6, auto);
   align-content: center;
   gap: 1rem 0.45rem;
-  min-height: 640px;
-  padding: 0.5rem 0;
-  overflow: hidden;
+  min-height: 680px;
+  padding: 2.25rem 1.75rem 2.75rem;
+  overflow: visible;
   animation: fadeInUp 0.9s ease-out 0.24s both;
 }
 .question-cloud {
