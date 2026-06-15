@@ -2272,7 +2272,7 @@ html[data-pais="pa"] .country-flag {
 /* ============ SEGUROS COTIZADOR ============ */
 .insurance-tool { margin-top: 1.75rem; margin-bottom: 1.35rem; }
 .insurance-tool-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.15rem; }
-.insurance-kicker, .insurance-results-head .section-eyebrow { display: block; margin-bottom: 0.4rem; font-family: var(--font-mono); color: var(--emerald); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.insurance-results-head .section-eyebrow { display: block; margin-bottom: 0.4rem; font-family: var(--font-mono); color: var(--gold); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 .insurance-tool-head h3, .insurance-results-head h3 { margin: 0; font-size: 22px; line-height: 1.15; letter-spacing: -0.03em; }
 .insurance-country-pill { flex-shrink: 0; padding: 0.55rem 0.85rem; border-radius: 999px; border: 1px solid var(--gray-100); background: var(--off-white); color: var(--ink-soft); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
 .insurance-tabs { display: flex; gap: 0; padding: 4px; margin-bottom: 1.5rem; background: var(--off-white); border: 1px solid var(--gray-100); border-radius: var(--r-lg); box-shadow: var(--shadow-soft); }
