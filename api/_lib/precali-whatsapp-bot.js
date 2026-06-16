@@ -35,13 +35,14 @@ const BANKS = [
 ];
 
 const COUNTRY_CONFIG = {
-  CR: { currency: "CRC", locale: "es-CR" },
-  MX: { currency: "MXN", locale: "es-MX" },
-  GT: { currency: "GTQ", locale: "es-GT" },
-  PA: { currency: "USD", locale: "en-US" },
-  HN: { currency: "HNL", locale: "es-HN" },
-  NI: { currency: "NIO", locale: "es-NI" },
-  SV: { currency: "USD", locale: "es-SV" },
+  CR: { currency: "CRC", locale: "es-CR", scale: 1 },
+  MX: { currency: "MXN", locale: "es-MX", scale: 29 },
+  GT: { currency: "GTQ", locale: "es-GT", scale: 68 },
+  PA: { currency: "USD", locale: "en-US", scale: 540 },
+  HN: { currency: "HNL", locale: "es-HN", scale: 22 },
+  NI: { currency: "NIO", locale: "es-NI", scale: 15 },
+  SV: { currency: "USD", locale: "es-SV", scale: 540 },
+  US: { currency: "USD", locale: "en-US", scale: 540 },
 };
 
 const AMOUNT_PATTERN = /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/;
@@ -107,6 +108,7 @@ function normalizeTypos(text) {
 }
 
 function detectCountry(text) {
+  if (/\busd\b|dolares?|\$/.test(text)) return "US";
   if (/\bmexico\b|\bmx\b/.test(text)) return "MX";
   if (/\bguatemala\b|\bgt\b/.test(text)) return "GT";
   if (/\bpanama\b|\bpa\b/.test(text)) return "PA";
@@ -117,9 +119,14 @@ function detectCountry(text) {
 }
 
 function money(value, country) {
-  const rounded = Math.max(0, Math.round(Number(value) || 0));
   const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  const rounded = Math.max(0, Math.round((Number(value) || 0) / config.scale));
   return config.currency + " " + rounded.toLocaleString(config.locale);
+}
+
+function toInternalAmount(value, country) {
+  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  return Math.max(0, Math.round((Number(value) || 0) * config.scale));
 }
 
 function parseAmount(raw) {
@@ -166,7 +173,7 @@ function amountAfter(text, labels, blockers) {
 }
 
 function detectProduct(text) {
-  if (/(casa|vivienda|hipoteca|hipotecario|apartamento|apto|lote|terreno|propiedad|inmueble)/.test(text)) {
+  if (/(casa|vivienda|hipoteca|hipotecario|apartamento|departamento|apto|lote|terreno|propiedad|inmueble|condominio)/.test(text)) {
     return "hipoteca";
   }
   if (/(carro|auto|vehiculo|veiculo|vehicular|moto|prendario|pickup|pick up|camioneta)/.test(text)) {
@@ -183,11 +190,12 @@ function parseProfile(body) {
   const income =
     amountAfter(
       text,
-      ["gano", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo"],
+      ["gano", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "me quedan libres", "me quedan", "recibo"],
       ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
     ) ||
     findAmount(text, [
       /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de ingreso|de salario|netos|mensuales)/,
+      /gano[^\d]{0,20}\$?([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/,
     ]);
 
   const debt =
@@ -195,7 +203,7 @@ function parseProfile(body) {
       ? 0
       : amountAfter(
           text,
-          ["debo", "debemos", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos"],
+          ["debo", "debemos", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos", "me quitan", "me descuentan"],
           ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor", "tengo"]
         ) ||
         findAmount(text, [
@@ -205,11 +213,12 @@ function parseProfile(body) {
   const downPayment =
     amountAfter(
       text,
-      ["prima", "enganche", "aporte"],
+      ["prima", "enganche", "aporte", "ahorrados", "ahorrado", "tengo ahorrados", "tengo ahorrado"],
       ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "gano", "ingreso", "salario", "sueldo", "monto", "valor"]
     ) ||
     findAmount(text, [
       /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de\s+)?(?:prima|enganche|aporte)\b/,
+      /ahorrad[oa]s?\D{0,12}([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/,
     ]) ||
     0;
 
@@ -220,18 +229,22 @@ function parseProfile(body) {
       ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte"]
     );
   const assetValue = rawAssetValue >= 100000 ? rawAssetValue : 0;
+  const downPaymentPercentMatch = text.match(/(\d{1,2})\s*%\s*(?:de\s+)?(?:prima|enganche|aporte)/);
+  const downPaymentFromPercent = downPaymentPercentMatch && assetValue > 0
+    ? Math.round(assetValue * (Number(downPaymentPercentMatch[1]) / 100))
+    : 0;
 
-  const yearsMatch = text.match(/(\d{1,2})\s*(?:anos|ano|anios|meses|plazo)/);
+  const yearsMatch = text.match(/(\d{1,2})\s*(?:anos|ano|anios|plazo)/);
   const defaultYears = product === "hipoteca" ? 30 : product === "personal" ? 5 : 6;
   const requestedYears = yearsMatch ? Number(yearsMatch[1]) : defaultYears;
 
   return {
     country,
     product,
-    income,
-    debt,
-    downPayment,
-    assetValue,
+    income: toInternalAmount(income, country),
+    debt: toInternalAmount(debt, country),
+    downPayment: toInternalAmount(downPayment || downPaymentFromPercent, country),
+    assetValue: toInternalAmount(assetValue, country),
     requestedYears: Math.max(1, Math.min(requestedYears || defaultYears, 30)),
   };
 }
@@ -353,7 +366,7 @@ function closingQuestion(question) {
 }
 
 function hasDebtSignal(text) {
-  return /(debo|debemos|deuda|deudas|pago|pagos|cuotas|rebajos|no debo|sin deudas?|deuda cero)/.test(text);
+  return /(debo|debemos|deuda|deudas|pago|pagos|cuotas|rebajos|no debo|sin deudas?|deuda cero|tarjetas?|quitan|descuentan)/.test(text);
 }
 
 function hasDownPaymentSignal(text) {
@@ -366,6 +379,179 @@ function detectRequestedBank(text) {
   if (/promerica/.test(text)) return "Promerica";
   if (/lafise/.test(text)) return "Lafise";
   if (/davi/.test(text)) return "DaviBank";
+  return "";
+}
+
+function detectApplicantContext(body, profile) {
+  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const ageMatch = text.match(/\b(\d{2})\s*anos?\b/);
+  const age = ageMatch ? Number(ageMatch[1]) : 0;
+  const firstHome = /(primer hogar|primer departamento|primera casa|novio y yo|mi novio y yo|pareja|juntos ganamos|co-propietarios|co deudor)/.test(text);
+
+  return {
+    independent: /(independiente|freelance|freelancer|programador|trabajo remoto|facturas|estados de cuenta|sin recibos)/.test(text),
+    coBorrower: /(novio y yo|mi novio y yo|pareja|juntos ganamos|co-propietarios|co deudor|mancomunad)/.test(text),
+    debtConsolidator: /(tarjetas?|al tope|prestamo personal|capacidad ahogada|consolid)/.test(text) || (profile.debt > profile.income * 0.3),
+    blemishedCredit: /(buro|manchas?|atras|atrasado|mala racha|finiquito|historial)/.test(text),
+    highDownPayment: profile.assetValue > 0 && profile.downPayment / Math.max(profile.assetValue, 1) >= 0.35,
+    recentEmployment: /(apenas|reci[eé]n|periodo de prueba|entre a trabajar)/.test(text) || /\b([1-5])\s*meses\b/.test(text),
+    informal: /(tienda|abarrotes|efectivo|no declaro|negocio propio|sector informal|comercio local)/.test(text),
+    senior: /pensionad/.test(text) || age >= 60,
+    noSavings: /(no tengo nada ahorrado|cero enganche|100%|sin prima|sin ahorros)/.test(text),
+    foreignResident: /(ciudadano estadounidense|residencia legal|extranjero|expatriado|residente reciente)/.test(text),
+    firstHome,
+    age,
+  };
+}
+
+function buildDiagnosticIntro(analysis) {
+  if (analysis.independent) return "Entiendo perfectamente. Como independiente, lo clave es demostrar estabilidad.";
+  if (analysis.coBorrower) return "Tiene sentido. Uniendo ingresos, la foto mejora bastante.";
+  if (analysis.debtConsolidator) return "Entiendo el cuello de botella. Tus deudas te estan comiendo capacidad.";
+  if (analysis.blemishedCredit) return "Entiendo la preocupacion. Una mancha pagada no pesa igual que una deuda activa.";
+  if (analysis.highDownPayment) return "Tu prima alta juega mucho a tu favor.";
+  if (analysis.recentEmployment) return "Vas bien, pero la antiguedad laboral pesa bastante.";
+  if (analysis.informal) return "Entiendo tu caso. El reto es volver trazable ese ingreso.";
+  if (analysis.senior) return "Claro. La edad pesa mas por el seguro que por tu ingreso.";
+  if (analysis.noSavings) return "Te entiendo. Sin prima, el mercado se pone mas cerrado.";
+  if (analysis.foreignResident) return "Si, hay ruta. La residencia y el ingreso externo cambian el juego.";
+  if (analysis.firstHome) return "Buen momento para ordenar la compra del primer hogar.";
+  return "";
+}
+
+function buildProfileAdvice(profile, analysis, results) {
+  const lines = [];
+
+  if (analysis.independent) {
+    lines.push(`1. Ordena de ${bold("6 a 12 meses")} de estados de cuenta y facturas.`);
+    lines.push("2. Te conviene una ruta con banca flexible o cooperativa.");
+  } else if (analysis.coBorrower) {
+    lines.push("1. Si van juntos, podemos sumar ingresos mancomunados.");
+    lines.push("2. Conviene cuidar ambas deudas antes de aplicar.");
+  } else if (analysis.debtConsolidator) {
+    lines.push(`1. Tus deudas actuales consumen ${bold(money(profile.debt, profile.country))} por mes.`);
+    lines.push("2. Podemos explorar una compra con consolidacion para liberar cuota.");
+  } else if (analysis.blemishedCredit) {
+    lines.push("1. Si la deuda ya esta pagada, una carta de finiquito ayuda mucho.");
+    lines.push("2. Vale la pena explorar cooperativas o banca de segunda oportunidad.");
+  } else if (analysis.highDownPayment) {
+    lines.push("1. Tu prima baja mucho el riesgo para el banco.");
+    lines.push("2. Eso ayuda a defender mejor tasa y aprobacion.");
+  } else if (analysis.recentEmployment) {
+    lines.push("1. Esperar a cumplir 6 meses te abre mas puertas.");
+    lines.push("2. Si venis del mismo sector, podemos defender continuidad laboral.");
+  } else if (analysis.informal) {
+    lines.push("1. Empeza a bancarizar ventas por al menos 6 meses.");
+    lines.push("2. Tambien podemos revisar microfinancieras o visita de negocio.");
+  } else if (analysis.senior) {
+    lines.push("1. Lo normal es acortar plazo o sumar un co-deudor joven.");
+    lines.push("2. La clave es cuadrar con la regla edad mas plazo.");
+  } else if (analysis.noSavings) {
+    const minimumDown = profile.assetValue ? Math.round(profile.assetValue * 0.1) : 0;
+    if (minimumDown > 0) lines.push(`1. Para empezar, apunta a una prima minima de ${bold(money(minimumDown, profile.country))}.`);
+    lines.push("2. Sin prima, casi ningun banco financia el 100%.");
+  } else if (analysis.foreignResident) {
+    lines.push("1. Hay bancos que manejan residentes con ingresos externos.");
+    lines.push("2. Te van a pedir residencia, origen de fondos y estados de cuenta.");
+  } else if (analysis.firstHome) {
+    lines.push("1. Vale la pena priorizar plazo largo y prima baja.");
+    lines.push("2. Tambien podemos probar escenario con co-propietario.");
+  } else if (results.length) {
+    lines.push("1. La tasa mas baja no siempre es la mejor si aprieta la cuota.");
+    lines.push("2. Conviene elegir la opcion que deje aire a tu presupuesto.");
+  }
+
+  return lines.slice(0, 2);
+}
+
+function defaultNextQuestion(analysis) {
+  if (analysis.coBorrower) return "¿Te hace sentido este plan o prefieres que exploremos bancos que acepten ingresos de co-propietarios como tu pareja?";
+  if (analysis.independent) return "¿Te hace sentido este plan o prefieres que enfoquemos bancos que acepten estados de cuenta?";
+  if (analysis.debtConsolidator) return "¿Te hace sentido este plan o prefieres que recalculemos limpiando tus deudas primero?";
+  return "¿Te hace sentido este plan o prefieres que exploremos bancos que acepten ingresos de co-propietarios como tu pareja?";
+}
+
+function buildSpecialistStepMessage(profile, analysis, text) {
+  if (analysis.blemishedCredit && !profile.income) {
+    return [
+      "Entiendo la preocupacion. Una mancha pagada no pesa igual que una deuda activa.",
+      "Con finiquito y buen ingreso, todavia hay ruta.",
+      closingQuestion("¿Cuanto ganas al mes hoy?"),
+    ].join("\n");
+  }
+
+  if (analysis.foreignResident && !profile.income) {
+    return [
+      "Si hay ruta para residente con ingresos externos.",
+      "Lo clave es mostrar residencia y estados de cuenta en dolares.",
+      closingQuestion("¿Cuanto ganas al mes y desde hace cuanto?"),
+    ].join("\n");
+  }
+
+  if (analysis.recentEmployment && profile.income) {
+    return [
+      "Entiendo la urgencia. El punto delicado es tu antiguedad.",
+      "Muchos bancos piden minimo 6 meses o continuidad comprobable.",
+      closingQuestion("¿Venias de un trabajo similar antes de este empleo?"),
+    ].join("\n");
+  }
+
+  if (analysis.senior && profile.income) {
+    return [
+      "Tu ingreso estable ayuda mucho.",
+      "Lo que manda aqui es la regla edad mas plazo del seguro.",
+      closingQuestion("¿Te sirve ver el escenario a 10 o 12 anos, o con co-deudor?"),
+    ].join("\n");
+  }
+
+  if (analysis.noSavings && profile.income) {
+    return [
+      "Te entiendo. El mercado casi nunca financia el 100%.",
+      "Lo sano es apuntar al menos a 10% de prima mas gastos.",
+      closingQuestion("¿Cuanto podrias ahorrar para empezar la prima?"),
+    ].join("\n");
+  }
+
+  if (analysis.highDownPayment && profile.income && !hasDebtSignal(text)) {
+    return [
+      "Tu prima alta baja mucho el riesgo para el banco.",
+      "Eso ayuda a defender mejor aprobacion y tasa.",
+      closingQuestion("¿Tenes hoy alguna deuda mensual reportable?"),
+    ].join("\n");
+  }
+
+  if (analysis.independent && profile.income && !hasDebtSignal(text)) {
+    return [
+      "Entiendo perfectamente. Como independiente, lo clave es demostrar estabilidad.",
+      "Con 6 a 12 meses de estados de cuenta ya podemos perfilar mejor.",
+      closingQuestion("¿Pagas hoy alguna deuda mensual?"),
+    ].join("\n");
+  }
+
+  if (analysis.coBorrower && profile.income && !hasDebtSignal(text)) {
+    return [
+      "Si, se pueden sumar ingresos mancomunados.",
+      "Eso mejora bastante la capacidad de compra.",
+      closingQuestion("¿Cuanto pagan en deudas entre los dos?"),
+    ].join("\n");
+  }
+
+  if (analysis.debtConsolidator && profile.income) {
+    return [
+      "Entiendo el cuello de botella. Tus deudas estan ahogando la cuota.",
+      "Podemos mirar una compra con consolidacion para liberar aire.",
+      closingQuestion("¿Tenes alguna prima disponible para arrancar?"),
+    ].join("\n");
+  }
+
+  if (analysis.informal && profile.income && !hasDebtSignal(text)) {
+    return [
+      "Entiendo tu caso. El reto es volver trazable ese ingreso.",
+      "Bancarizar ventas por 6 meses te abre muchas mas puertas.",
+      closingQuestion("¿Hoy pagas alguna deuda mensual o todo esta libre?"),
+    ].join("\n");
+  }
+
   return "";
 }
 
@@ -469,12 +655,14 @@ function documentFollowUpMessage(profile) {
   ].join("\n");
 }
 
-function formatResults(profile, results) {
+function formatResults(profile, results, analysis) {
   const hasAssetContext = profile.product !== "personal";
   const hasDownPaymentOnly = hasAssetContext && profile.downPayment > 0 && !profile.assetValue;
   const netIncome = Math.max(0, profile.income - profile.debt);
   const targetLoan = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
+  const intro = analysis ? buildDiagnosticIntro(analysis) : "";
   const lines = [
+    intro || null,
     bold("Precalificacion estimada"),
     "Producto: " + bold(productTitle(profile.product)),
     "Ingreso: " + bold(money(profile.income, profile.country)),
@@ -501,8 +689,9 @@ function formatResults(profile, results) {
       : "Con esos datos no encontre una opcion clara.");
     lines.push(affordabilityGuidance(profile) || "Probemos con mas prima o menos monto.");
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
+    buildProfileAdvice(profile, analysis || {}, results).forEach((line) => lines.push(line));
     lines.push("Esto es una precalificacion estimada.");
-    lines.push(closingQuestion("¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
+    lines.push(closingQuestion(defaultNextQuestion(analysis || {})));
     return lines.join("\n");
   }
 
@@ -532,7 +721,8 @@ function formatResults(profile, results) {
   if ((profile.product === "vehiculo" || profile.product === "hipoteca") && !profile.assetValue) {
     lines.push("Si me decis el valor del " + assetLabel(profile.product) + ", afino la cuota real.");
   }
-  lines.push(closingQuestion("¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
+  buildProfileAdvice(profile, analysis || {}, results).forEach((line) => lines.push(line));
+  lines.push(closingQuestion(defaultNextQuestion(analysis || {})));
   return lines.filter(Boolean).join("\n");
 }
 
@@ -540,6 +730,7 @@ function buildReplyFromProfile(profile, options) {
   const cleanProfile = coerceProfile(profile);
   const missing = missingProfileMessage(cleanProfile);
   const prefixLines = Array.isArray(options && options.prefixLines) ? options.prefixLines.filter(Boolean) : [];
+  const analysis = options && options.analysis ? options.analysis : null;
 
   if (missing) {
     return {
@@ -547,7 +738,7 @@ function buildReplyFromProfile(profile, options) {
     };
   }
 
-  const message = formatResults(cleanProfile, simulate(cleanProfile));
+  const message = formatResults(cleanProfile, simulate(cleanProfile), analysis);
   return {
     message: prefixLines.length ? prefixLines.concat("", message).join("\n") : message,
   };
@@ -581,11 +772,9 @@ function buildReply(input) {
   }
 
   const profile = parseProfile(body);
+  const analysis = detectApplicantContext(body, profile);
 
-  if (!profile.income && (
-    likelyDocumentFollowUp(body) ||
-    (profile.product !== "personal" && (profile.downPayment > 0 || profile.assetValue > 0 || /\b(no debo|sin deudas?|deuda cero)\b/.test(text)))
-  )) {
+  if (!profile.income && likelyDocumentFollowUp(body)) {
     return { message: documentFollowUpMessage(profile) };
   }
 
@@ -599,7 +788,7 @@ function buildReply(input) {
     };
   }
 
-  if (/(aplicar|solicitar|me interesa|quiero esa|enviar|mandar|banco)/.test(text) && !/(gano|ingreso|salario|sueldo)/.test(text)) {
+  if (/(aplicar|solicitar|me interesa|quiero esa|enviar|mandar)/.test(text) && (detectRequestedBank(text) || /esa opcion|esa opción/.test(text)) && !/(gano|ingreso|salario|sueldo)/.test(text)) {
     const bank = detectRequestedBank(text);
     return {
       message: [
@@ -612,7 +801,7 @@ function buildReply(input) {
     };
   }
 
-  if (/(estado|aprobado|rechazado|seguimiento)/.test(text)) {
+  if (/(^|\b)(estado|aprobado|rechazado|seguimiento)(\b|$)/.test(text) && !/estados? de cuenta/.test(text)) {
     return {
       message: [
         "Estoy encima de tu trámite.",
@@ -621,6 +810,11 @@ function buildReply(input) {
         closingQuestion("¿Querés revisar si falta algún documento?"),
       ].join("\n"),
     };
+  }
+
+  const specialistStep = buildSpecialistStepMessage(profile, analysis, text);
+  if (specialistStep) {
+    return { message: specialistStep };
   }
 
   if (profile.product === "personal" && !/(personal|consumo|libre inversion|gastos personales)/.test(text) && !profile.income) {
@@ -656,7 +850,7 @@ function buildReply(input) {
   const missing = missingProfileMessage(profile);
   if (missing) return { message: missing };
 
-  return { message: formatResults(profile, simulate(profile)) };
+  return { message: formatResults(profile, simulate(profile), analysis) };
 }
 
 module.exports = {
