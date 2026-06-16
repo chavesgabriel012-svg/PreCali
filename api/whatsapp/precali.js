@@ -1,4 +1,4 @@
-const { buildReply, buildReplyFromProfile, parseProfile } = require("../_lib/precali-whatsapp-bot");
+const { buildReply, buildReplyFromProfile, coerceProfile, parseProfile } = require("../_lib/precali-whatsapp-bot");
 const { analyzeWithPreCaliAi, shouldUseAiForMessage } = require("../_lib/precali-ai");
 const { readPreCaliDocument } = require("../_lib/precali-documents");
 const { fetchTwilioMedia } = require("../_lib/twilio-media");
@@ -54,7 +54,10 @@ function cleanupRecentContext() {
 function rememberRecentText(from, body) {
   if (!from || !hasUsefulBodyText(body)) return;
   cleanupRecentContext();
-  recentTextContext.set(String(from), {
+  const key = String(from);
+  const current = recentTextContext.get(key) || {};
+  recentTextContext.set(key, {
+    ...current,
     body: String(body).trim(),
     ts: Date.now(),
   });
@@ -66,6 +69,26 @@ function readRecentText(from) {
   const entry = recentTextContext.get(String(from));
   if (!entry) return "";
   return entry.body || "";
+}
+
+function rememberRecentProfile(from, profile, body) {
+  if (!from || !profile) return;
+  cleanupRecentContext();
+  const key = String(from);
+  const current = recentTextContext.get(key) || {};
+  recentTextContext.set(key, {
+    ...current,
+    body: hasUsefulBodyText(body) ? String(body).trim() : current.body,
+    profile: coerceProfile(profile),
+    ts: Date.now(),
+  });
+}
+
+function readRecentProfile(from) {
+  if (!from) return null;
+  cleanupRecentContext();
+  const entry = recentTextContext.get(String(from));
+  return entry && entry.profile ? entry.profile : null;
 }
 
 function money(value) {
@@ -95,6 +118,14 @@ function explicitProductFromBody(body) {
 
 function bodyHasYearHint(body) {
   return /(\d{1,2})\s*(?:anos|ano|anios|años|año|plazo)|plazo.{0,24}\d{1,2}/.test(normalizeForIntent(body));
+}
+
+function defaultYearsForProduct(product) {
+  return product === "hipoteca" ? 30 : product === "vehiculo" ? 6 : 5;
+}
+
+function bodyHasDebtZeroHint(body) {
+  return /\b(no debo|sin deudas?|deuda cero|deudas? en 0)\b/.test(normalizeForIntent(body));
 }
 
 function mergeDocumentAndMessageProfile(documentProfile, body) {
@@ -149,6 +180,53 @@ function buildContextBody(input) {
   return current || remembered || "";
 }
 
+function shouldUseRememberedProfile(input, rememberedProfile) {
+  if (!rememberedProfile || !rememberedProfile.income || Number(input && input.numMedia ? input.numMedia : 0) > 0) return false;
+  const body = String((input && input.body) || "").trim();
+  if (!body) return false;
+  const normalized = normalizeForIntent(body);
+  const hasFollowUpCue = /^(y|si|y si)\b/.test(normalized) || /\b(ahora|mas bien|mejor|entonces)\b/.test(normalized);
+
+  if (/(^|\b)(hola|buenas|menu|ayuda|inicio|empezar|hey|ola|aplicar|solicitar|me interesa|quiero esa|enviar|mandar|estado|aprobado|rechazado|seguimiento)\b/.test(normalized)) {
+    return false;
+  }
+
+  const current = parseProfile(body);
+  if (current.income) return hasFollowUpCue;
+  if (current.downPayment >= 10000 || current.assetValue >= 100000 || current.debt >= 10000) return true;
+  if (bodyHasDebtZeroHint(body)) return true;
+  if (explicitProductFromBody(body)) return true;
+  if (bodyHasYearHint(body)) return true;
+  return hasFollowUpCue || /\b(con|para|prima|monto|valor|plazo|anos|ano|carro|casa|vehiculo|hipoteca|deuda|deudas|cuota)\b/.test(normalized);
+}
+
+function mergeRememberedProfileWithBody(rememberedProfile, body) {
+  const remembered = coerceProfile(rememberedProfile);
+  const current = parseProfile(body || "");
+  const explicitProduct = explicitProductFromBody(body);
+  const product = explicitProduct || remembered.product || current.product || "personal";
+  const productChanged = product !== remembered.product;
+  const notes = [];
+
+  const merged = {
+    product,
+    income: current.income || remembered.income || 0,
+    debt: bodyHasDebtZeroHint(body) ? 0 : current.debt >= 10000 ? current.debt : remembered.debt || 0,
+    downPayment: current.downPayment >= 10000 ? current.downPayment : remembered.downPayment || 0,
+    assetValue: current.assetValue >= 100000 ? current.assetValue : productChanged ? 0 : remembered.assetValue || 0,
+    requestedYears: bodyHasYearHint(body) ? current.requestedYears : productChanged ? defaultYearsForProduct(product) : remembered.requestedYears || defaultYearsForProduct(product),
+  };
+
+  if (productChanged) notes.push("producto");
+  if (current.income) notes.push("ingreso");
+  if (current.assetValue >= 100000) notes.push("monto");
+  if (current.downPayment >= 10000) notes.push("prima");
+  if (current.debt >= 10000 || bodyHasDebtZeroHint(body)) notes.push("deudas");
+  if (bodyHasYearHint(body)) notes.push("plazo");
+
+  return { profile: merged, usedMessageHints: notes };
+}
+
 async function buildReplyFromLocalDocument(input) {
   if (Number(input.numMedia || 0) <= 0 || !input.mediaUrl) return null;
 
@@ -174,6 +252,7 @@ async function buildReplyFromLocalDocument(input) {
     }
     if (detected.length) prefixLines.push(detected.join(" | "));
     for (const warning of documentResult.warnings || []) prefixLines.push("Nota: " + warning);
+    rememberRecentProfile(input.from, merged.profile, contextBody);
     return buildReplyFromProfile(merged.profile, { prefixLines });
   }
 
@@ -216,6 +295,7 @@ module.exports = async function handler(req, res) {
     }
 
     let reply;
+    let usedRememberedProfile = false;
     if (Number(input.numMedia || 0) > 0 && input.mediaUrl) {
       try {
         reply = await buildReplyFromLocalDocument(input);
@@ -227,6 +307,18 @@ module.exports = async function handler(req, res) {
           };
         }
       }
+    }
+
+    const rememberedProfile = readRecentProfile(input.from);
+    if (!reply && shouldUseRememberedProfile(input, rememberedProfile)) {
+      const merged = mergeRememberedProfileWithBody(rememberedProfile, input.body);
+      const prefixLines = ["Tome en cuenta tu chat anterior para recalcular."];
+      if (merged.usedMessageHints.length) {
+        prefixLines.push("Actualice: " + merged.usedMessageHints.join(", ") + ".");
+      }
+      rememberRecentProfile(input.from, merged.profile, buildContextBody(input));
+      usedRememberedProfile = true;
+      reply = buildReplyFromProfile(merged.profile, { prefixLines });
     }
 
     if (!reply && shouldUseAiForMessage(input)) {
@@ -255,6 +347,13 @@ module.exports = async function handler(req, res) {
 
     if (!reply) {
       reply = buildReply(input);
+    }
+
+    if (!usedRememberedProfile && hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
+      const parsed = parseProfile(input.body);
+      if (parsed.income) {
+        rememberRecentProfile(input.from, parsed, input.body);
+      }
     }
 
     res.statusCode = 200;
