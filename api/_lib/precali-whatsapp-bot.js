@@ -285,7 +285,7 @@ function missingProfileMessage(profile) {
 
 function likelyDocumentFollowUp(body) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
-  const mentionsIncomeContext = /(ingreso|ingresos|salario|sueldo|neto|devengo|orden patronal|colilla|boleta|documento|pdf|archivo|adjunto|estos son mis ingresos|te mando)/.test(text);
+  const mentionsIncomeContext = /(ingreso|ingresos|salario|sueldo|neto|devengo|orden patronal|colilla|boleta|documento|pdf|archivo|adjunto|estos son mis ingresos|te mando|no debo|sin deudas?|deuda cero)/.test(text);
   const mentionsIntent = /(carro|auto|vehiculo|veiculo|casa|vivienda|hipoteca|credito|prestamo|financiar)/.test(text);
   return mentionsIncomeContext && mentionsIntent && !hasWrittenAmountCue(text);
 }
