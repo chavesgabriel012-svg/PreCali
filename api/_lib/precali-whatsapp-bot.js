@@ -34,6 +34,16 @@ const BANKS = [
   },
 ];
 
+const COUNTRY_CONFIG = {
+  CR: { currency: "CRC", locale: "es-CR" },
+  MX: { currency: "MXN", locale: "es-MX" },
+  GT: { currency: "GTQ", locale: "es-GT" },
+  PA: { currency: "USD", locale: "en-US" },
+  HN: { currency: "HNL", locale: "es-HN" },
+  NI: { currency: "NIO", locale: "es-NI" },
+  SV: { currency: "USD", locale: "es-SV" },
+};
+
 const AMOUNT_PATTERN = /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/;
 
 function normalize(text) {
@@ -96,9 +106,20 @@ function normalizeTypos(text) {
     .replace(/\bhipotekario\b/g, "hipotecario");
 }
 
-function money(value) {
+function detectCountry(text) {
+  if (/\bmexico\b|\bmx\b/.test(text)) return "MX";
+  if (/\bguatemala\b|\bgt\b/.test(text)) return "GT";
+  if (/\bpanama\b|\bpa\b/.test(text)) return "PA";
+  if (/\bhonduras\b|\bhn\b/.test(text)) return "HN";
+  if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
+  if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
+  return "CR";
+}
+
+function money(value, country) {
   const rounded = Math.max(0, Math.round(Number(value) || 0));
-  return "CRC " + rounded.toLocaleString("es-CR");
+  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  return config.currency + " " + rounded.toLocaleString(config.locale);
 }
 
 function parseAmount(raw) {
@@ -157,6 +178,7 @@ function detectProduct(text) {
 function parseProfile(body) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const product = detectProduct(text);
+  const country = detectCountry(text);
 
   const income =
     amountAfter(
@@ -204,6 +226,7 @@ function parseProfile(body) {
   const requestedYears = yearsMatch ? Number(yearsMatch[1]) : defaultYears;
 
   return {
+    country,
     product,
     income,
     debt,
@@ -215,10 +238,12 @@ function parseProfile(body) {
 
 function coerceProfile(profile) {
   const source = profile || {};
+  const country = COUNTRY_CONFIG[source.country] ? source.country : "CR";
   const product = ["personal", "vehiculo", "hipoteca"].includes(source.product) ? source.product : "personal";
   const defaultYears = product === "hipoteca" ? 30 : product === "personal" ? 5 : 6;
 
   return {
+    country,
     product,
     income: Math.max(0, Math.round(Number(source.income) || 0)),
     debt: Math.max(0, Math.round(Number(source.debt) || 0)),
@@ -244,13 +269,16 @@ function amountForPayment(payment, annualRate, years) {
 
 function simulate(profile) {
   const results = [];
+  const netIncome = Math.max(0, profile.income - profile.debt);
+  if (netIncome <= 0) return results;
 
   for (const bank of BANKS) {
     const condition = bank[profile.product];
     if (!condition) continue;
 
     const years = Math.min(profile.requestedYears, condition.maxYears);
-    const capacity = Math.max(0, profile.income * condition.ratio - profile.debt);
+    const ratio = Math.max(0.4, Math.min(0.45, Number(condition.ratio) || 0.4));
+    const capacity = Math.max(0, profile.income * ratio - profile.debt);
     let amount = amountForPayment(capacity, condition.rate, years);
 
     if (profile.assetValue && profile.product !== "personal") {
@@ -270,10 +298,13 @@ function simulate(profile) {
       amount,
       payment,
       capacity,
+      ratio,
+      minIncome: condition.minIncome,
+      maxYears: condition.maxYears,
     });
   }
 
-  return results.sort((a, b) => a.payment - b.payment);
+  return results.sort((a, b) => a.rate - b.rate || b.amount - a.amount);
 }
 
 function missingProfileMessage(profile) {
@@ -378,6 +409,47 @@ function affordabilityGuidance(profile) {
   return "";
 }
 
+function optimizationIdeas(profile) {
+  const conditions = BANKS.map((bank) => ({ bank: bank.name, condition: bank[profile.product] })).filter((item) => item.condition);
+  if (!conditions.length) return [];
+
+  const targetLoan = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
+  const bestRate = conditions.slice().sort((a, b) => a.condition.rate - b.condition.rate)[0];
+  const ideas = [];
+
+  if (targetLoan > 0 && bestRate) {
+    const years = Math.min(profile.requestedYears, bestRate.condition.maxYears);
+    const ratio = Math.max(0.4, Math.min(0.45, Number(bestRate.condition.ratio) || 0.4));
+    const currentCapacity = Math.max(0, profile.income * ratio - profile.debt);
+    const currentLoan = amountForPayment(currentCapacity, bestRate.condition.rate, years);
+    const financeLimit = profile.assetValue * (bestRate.condition.finance || 0.85);
+    const reachableLoan = Math.min(currentLoan, financeLimit);
+    const extraDownPayment = Math.max(0, targetLoan - reachableLoan);
+    if (extraDownPayment > 0) {
+      ideas.push(`1. Si subis la prima en ${bold(money(extraDownPayment, profile.country))}, te acercas a ${bold(bestRate.bank)}.`);
+    }
+
+    if (profile.debt > 0) {
+      const debtFreeCapacity = Math.max(0, profile.income * ratio);
+      const debtFreeLoan = Math.min(amountForPayment(debtFreeCapacity, bestRate.condition.rate, years), financeLimit || Number.MAX_SAFE_INTEGER);
+      const uplift = currentLoan > 0 ? Math.round(((debtFreeLoan - currentLoan) / currentLoan) * 100) : 0;
+      if (currentLoan <= 0 && debtFreeLoan > 0) {
+        ideas.push(`2. Si unificas deudas por ${bold(money(profile.debt, profile.country))}, vuelves a tener capacidad para aplicar.`);
+      } else if (uplift > 0) {
+        ideas.push(`2. Si unificas deudas por ${bold(money(profile.debt, profile.country))}, tu capacidad sube cerca de ${bold(uplift + "%")}.`);
+      }
+    }
+
+    if (profile.requestedYears < bestRate.condition.maxYears) {
+      const extendedYears = bestRate.condition.maxYears;
+      const lowerPayment = paymentFor(Math.min(targetLoan, financeLimit || targetLoan), bestRate.condition.rate, extendedYears);
+      ideas.push(`3. Si amplias el plazo a ${bold(extendedYears + " anos")}, tu cuota baja a ${bold(money(lowerPayment, profile.country))}.`);
+    }
+  }
+
+  return ideas.slice(0, 3);
+}
+
 function documentFollowUpMessage(profile) {
   const hints = [];
   if (profile.product === "vehiculo") hints.push("buscás carro");
@@ -400,51 +472,67 @@ function documentFollowUpMessage(profile) {
 function formatResults(profile, results) {
   const hasAssetContext = profile.product !== "personal";
   const hasDownPaymentOnly = hasAssetContext && profile.downPayment > 0 && !profile.assetValue;
+  const netIncome = Math.max(0, profile.income - profile.debt);
+  const targetLoan = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
   const lines = [
     bold("Precalificacion estimada"),
     "Producto: " + bold(productTitle(profile.product)),
-    "Ingreso: " + bold(money(profile.income)),
-    "Deudas: " + bold(money(profile.debt)),
+    "Ingreso: " + bold(money(profile.income, profile.country)),
+    "Deudas: " + bold(money(profile.debt, profile.country)),
+    "Ingreso neto: " + bold(money(netIncome, profile.country)),
     profile.assetValue
-      ? "Valor de referencia: " + bold(money(profile.assetValue)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment)) : "")
+      ? "Valor de referencia: " + bold(money(profile.assetValue, profile.country)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment, profile.country)) : "")
       : hasDownPaymentOnly
-        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment)) + "."
+        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile.country)) + "."
         : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
     "",
   ];
 
+  if (netIncome <= 0) {
+    lines.push("No puedo simular con ingreso neto en cero.");
+    lines.push("Primero hay que bajar deudas o subir ingreso.");
+    lines.push(closingQuestion("¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
+    return lines.join("\n");
+  }
+
   if (!results.length) {
     lines.push(profile.downPayment && hasAssetContext
-      ? "Ya tomé en cuenta tu prima de " + bold(money(profile.downPayment)) + "."
+      ? "Ya tome en cuenta tu prima de " + bold(money(profile.downPayment, profile.country)) + "."
       : "Con esos datos no encontre una opcion clara.");
-    lines.push(affordabilityGuidance(profile) || "Probemos con más prima o menos monto.");
-    lines.push("Esto es una precalificación estimada.");
-    lines.push(closingQuestion("¿Querés que te diga cuánto prima te faltaría?"));
+    lines.push(affordabilityGuidance(profile) || "Probemos con mas prima o menos monto.");
+    optimizationIdeas(profile).forEach((idea) => lines.push(idea));
+    lines.push("Esto es una precalificacion estimada.");
+    lines.push(closingQuestion("¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
     return lines.join("\n");
   }
 
   if (results.length === 1) {
-    lines.push("Hoy veo una opción clara con tu perfil.");
-    lines.push("Las demás quedan cortas en política o capacidad.");
-    lines.push("");
+    lines.push("Hoy veo una opcion clara con tu perfil.");
+    lines.push("Las demas quedan cortas en politica o capacidad.");
   }
 
-  results.slice(0, 4).forEach((result, index) => {
+  if (targetLoan > 0 && results[0] && results[0].amount < targetLoan) {
+    lines.push(`Hoy no llegas al monto objetivo de ${bold(money(targetLoan, profile.country))}.`);
+    lines.push(`Tu mejor techo actual ronda ${bold(money(results[0].amount, profile.country))}.`);
+    optimizationIdeas(profile).forEach((idea) => lines.push(idea));
+  }
+
+  results.slice(0, 3).forEach((result, index) => {
     lines.push(
-      `${index + 1}. ${bold(result.bank)}`,
-      `Tasa: ${bold(result.rate.toFixed(2) + "%")} | Plazo: ${bold(result.years + " anos")}`,
-      `${profile.assetValue ? "Monto financiado" : "Monto estimado"}: ${bold(money(result.amount))}`,
-      hasDownPaymentOnly ? `Valor total aprox: ${bold(money(result.amount + profile.downPayment))}` : null,
-      `Cuota aprox: ${bold(money(result.payment))}`,
-      ""
+      "────────────────",
+      `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
+      `${bold("Tasa de Interes")}: ${bold(result.rate.toFixed(2) + "%")}`,
+      `${bold("Monto Maximo de Prestamo")}: ${bold(money(result.amount, profile.country))}`,
+      `${bold("Cuota Mensual Estimada")}: ${bold(money(result.payment, profile.country))}`,
+      `${bold("Plazo")}: ${bold(result.years + " anos")}`
     );
   });
 
-  lines.push("Esto es una precalificación estimada.");
+  lines.push("Esto es una precalificacion estimada.");
   if ((profile.product === "vehiculo" || profile.product === "hipoteca") && !profile.assetValue) {
-    lines.push("Si me decís el valor del " + assetLabel(profile.product) + ", afino la cuota real.");
+    lines.push("Si me decis el valor del " + assetLabel(profile.product) + ", afino la cuota real.");
   }
-  lines.push(closingQuestion("¿Cuál opción se ajusta mejor a tu cuota mensual?"));
+  lines.push(closingQuestion("¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
   return lines.filter(Boolean).join("\n");
 }
 
