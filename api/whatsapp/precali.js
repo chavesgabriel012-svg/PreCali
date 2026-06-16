@@ -3,6 +3,9 @@ const { analyzeWithPreCaliAi, shouldUseAiForMessage } = require("../_lib/precali
 const { readPreCaliDocument } = require("../_lib/precali-documents");
 const { fetchTwilioMedia } = require("../_lib/twilio-media");
 
+const CONTEXT_TTL_MS = 20 * 60 * 1000;
+const recentTextContext = new Map();
+
 function escapeXml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -35,6 +38,34 @@ function readRawBody(req) {
 function parseParams(req, rawBody) {
   if (req.body && typeof req.body === "object") return req.body;
   return Object.fromEntries(new URLSearchParams(rawBody || ""));
+}
+
+function hasUsefulBodyText(body) {
+  return String(body || "").trim().length >= 3;
+}
+
+function cleanupRecentContext() {
+  const now = Date.now();
+  for (const [key, value] of recentTextContext.entries()) {
+    if (!value || now - value.ts > CONTEXT_TTL_MS) recentTextContext.delete(key);
+  }
+}
+
+function rememberRecentText(from, body) {
+  if (!from || !hasUsefulBodyText(body)) return;
+  cleanupRecentContext();
+  recentTextContext.set(String(from), {
+    body: String(body).trim(),
+    ts: Date.now(),
+  });
+}
+
+function readRecentText(from) {
+  if (!from) return "";
+  cleanupRecentContext();
+  const entry = recentTextContext.get(String(from));
+  if (!entry) return "";
+  return entry.body || "";
 }
 
 function money(value) {
@@ -109,6 +140,15 @@ function localDocumentFallbackMessage(documentResult) {
   return base.join("\n");
 }
 
+function buildContextBody(input) {
+  const current = String((input && input.body) || "").trim();
+  const remembered = readRecentText(input && input.from);
+  if (current && remembered && normalizeForIntent(current) !== normalizeForIntent(remembered)) {
+    return remembered + "\n" + current;
+  }
+  return current || remembered || "";
+}
+
 async function buildReplyFromLocalDocument(input) {
   if (Number(input.numMedia || 0) <= 0 || !input.mediaUrl) return null;
 
@@ -116,7 +156,8 @@ async function buildReplyFromLocalDocument(input) {
   const documentResult = readPreCaliDocument(media.buffer, input.mediaType || media.contentType);
 
   if (documentResult.ok && documentResult.profile && documentResult.profile.income) {
-    const merged = mergeDocumentAndMessageProfile(documentResult.profile, input.body);
+    const contextBody = buildContextBody(input);
+    const merged = mergeDocumentAndMessageProfile(documentResult.profile, contextBody);
     const prefixLines = ["Lector local PreCali: lei el documento sin IA."];
     const detected = [];
     for (const note of documentResult.notes || []) {
@@ -124,6 +165,9 @@ async function buildReplyFromLocalDocument(input) {
       detected.push(note);
     }
     if (merged.usedMessageHints.length) detected.push("Use tu mensaje para: " + merged.usedMessageHints.join(", "));
+    if (contextBody && !String(input.body || "").trim() && readRecentText(input.from)) {
+      detected.push("Tambien tome en cuenta tu mensaje anterior.");
+    }
     if (merged.usedMessageHints.includes("producto")) detected.push("Producto final: " + productLabel(merged.profile.product));
     if (documentResult.document && documentResult.document.strongObligations) {
       detected.push("Obligaciones fuertes detectadas: " + money(documentResult.document.strongObligations));
@@ -166,6 +210,10 @@ module.exports = async function handler(req, res) {
       mediaUrl: params.MediaUrl0,
       mediaType: params.MediaContentType0,
     };
+
+    if (hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
+      rememberRecentText(input.from, input.body);
+    }
 
     let reply;
     if (Number(input.numMedia || 0) > 0 && input.mediaUrl) {
