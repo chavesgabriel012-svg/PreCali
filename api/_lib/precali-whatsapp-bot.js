@@ -75,7 +75,7 @@ function normalizeAmountWords(text) {
 
   let result = text;
   for (const [word, value] of Object.entries(millions)) {
-    result = result.replace(new RegExp("\\b" + word + "\\s+millones?\\b", "g"), value + " millones");
+    result = result.replace(new RegExp("\\b" + word + "\\s+(?:millon|millones)\\b", "g"), value + " millones");
   }
   for (const [word, value] of Object.entries(thousands)) {
     result = result.replace(new RegExp("\\b" + word + "\\s+mil\\b", "g"), value + " mil");
@@ -181,12 +181,13 @@ function parseProfile(body) {
       ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "gano", "ingreso", "salario", "sueldo", "monto", "valor"]
     ) || 0;
 
-  const assetValue =
+  const rawAssetValue =
     amountAfter(
       text,
-      ["valor", "monto", "casa", "vivienda", "propiedad", "apartamento", "apto", "lote", "terreno", "carro", "auto", "vehiculo", "veiculo", "prestamo", "credito", "financiar", "financiamiento", "ocupo", "necesito", "nesesito"],
+      ["valor", "monto", "hipoteca", "hipotecario", "casa", "vivienda", "propiedad", "apartamento", "apto", "lote", "terreno", "carro", "auto", "vehiculo", "veiculo", "prestamo", "credito", "financiar", "financiamiento", "ocupo", "necesito", "nesesito"],
       ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte"]
     );
+  const assetValue = rawAssetValue >= 100000 ? rawAssetValue : 0;
 
   const yearsMatch = text.match(/(\d{1,2})\s*(?:anos|ano|anios|meses|plazo)/);
   const defaultYears = product === "hipoteca" ? 30 : product === "personal" ? 5 : 6;
@@ -345,7 +346,9 @@ function buildReply(input) {
     };
   }
 
-  if (!text || /^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)/.test(text)) {
+  const hasFinancialIntent = /(gano|ingreso|salario|sueldo|neto|debo|deuda|prima|enganche|casa|vivienda|hipoteca|carro|auto|vehiculo|credito|prestamo|plata|financiar)/.test(text);
+
+  if (!text || (/^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)\b/.test(text) && !hasFinancialIntent)) {
     return {
       message: [
         "Hola, soy PreCali por WhatsApp.",

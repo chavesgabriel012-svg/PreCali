@@ -1,4 +1,4 @@
-const { buildReply, buildReplyFromProfile } = require("../_lib/precali-whatsapp-bot");
+const { buildReply, buildReplyFromProfile, parseProfile } = require("../_lib/precali-whatsapp-bot");
 const { analyzeWithPreCaliAi, shouldUseAiForMessage } = require("../_lib/precali-ai");
 const { readPreCaliDocument } = require("../_lib/precali-documents");
 const { fetchTwilioMedia } = require("../_lib/twilio-media");
@@ -41,6 +41,55 @@ function money(value) {
   return "CRC " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("es-CR");
 }
 
+function productLabel(product) {
+  if (product === "hipoteca") return "credito hipotecario";
+  if (product === "vehiculo") return "credito vehicular";
+  return "credito personal";
+}
+
+function normalizeForIntent(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function explicitProductFromBody(body) {
+  const text = normalizeForIntent(body);
+  if (/(casa|vivienda|hipoteca|hipotecario|apartamento|apto|lote|terreno|propiedad|inmueble)/.test(text)) return "hipoteca";
+  if (/(carro|auto|vehiculo|veiculo|vehicular|moto|prendario|pickup|pick up|camioneta)/.test(text)) return "vehiculo";
+  if (/(personal|consumo|libre inversion|gastos personales)/.test(text)) return "personal";
+  return "";
+}
+
+function bodyHasYearHint(body) {
+  return /(\d{1,2})\s*(?:anos|ano|anios|años|año|plazo)|plazo.{0,24}\d{1,2}/.test(normalizeForIntent(body));
+}
+
+function mergeDocumentAndMessageProfile(documentProfile, body) {
+  const doc = documentProfile || {};
+  const bodyProfile = parseProfile(body || "");
+  const productHint = explicitProductFromBody(body);
+  const notes = [];
+
+  const merged = {
+    product: productHint || doc.product || bodyProfile.product || "personal",
+    income: Number(doc.income) || Number(bodyProfile.income) || 0,
+    debt: Math.max(Number(doc.debt) || 0, bodyProfile.debt >= 10000 ? Number(bodyProfile.debt) || 0 : 0),
+    downPayment: bodyProfile.downPayment >= 10000 ? bodyProfile.downPayment : Number(doc.downPayment) || 0,
+    assetValue: bodyProfile.assetValue >= 100000 ? bodyProfile.assetValue : Number(doc.assetValue) || 0,
+    requestedYears: bodyHasYearHint(body) ? bodyProfile.requestedYears : doc.requestedYears,
+  };
+
+  if (productHint && productHint !== doc.product) notes.push("producto");
+  if (bodyHasYearHint(body)) notes.push("plazo");
+  if (bodyProfile.assetValue >= 100000) notes.push("monto");
+  if (bodyProfile.downPayment >= 10000) notes.push("prima");
+  if (bodyProfile.debt >= 10000) notes.push("deudas");
+
+  return { profile: merged, usedMessageHints: notes };
+}
+
 function localDocumentFallbackMessage(documentResult) {
   const base = [
     "Recibi tu documento, pero el lector local de PreCali no pudo sacar suficientes datos para calcular.",
@@ -67,15 +116,21 @@ async function buildReplyFromLocalDocument(input) {
   const documentResult = readPreCaliDocument(media.buffer, input.mediaType || media.contentType);
 
   if (documentResult.ok && documentResult.profile && documentResult.profile.income) {
+    const merged = mergeDocumentAndMessageProfile(documentResult.profile, input.body);
     const prefixLines = ["Lector local PreCali: lei el documento sin IA."];
     const detected = [];
-    for (const note of documentResult.notes || []) detected.push(note);
+    for (const note of documentResult.notes || []) {
+      if (merged.usedMessageHints.includes("producto") && /^Producto detectado:/i.test(note)) continue;
+      detected.push(note);
+    }
+    if (merged.usedMessageHints.length) detected.push("Use tu mensaje para: " + merged.usedMessageHints.join(", "));
+    if (merged.usedMessageHints.includes("producto")) detected.push("Producto final: " + productLabel(merged.profile.product));
     if (documentResult.document && documentResult.document.strongObligations) {
       detected.push("Obligaciones fuertes detectadas: " + money(documentResult.document.strongObligations));
     }
     if (detected.length) prefixLines.push(detected.join(" | "));
     for (const warning of documentResult.warnings || []) prefixLines.push("Nota: " + warning);
-    return buildReplyFromProfile(documentResult.profile, { prefixLines });
+    return buildReplyFromProfile(merged.profile, { prefixLines });
   }
 
   if (process.env.PRECALI_AI_DOCUMENT_FALLBACK === "1" && shouldUseAiForMessage(input)) {

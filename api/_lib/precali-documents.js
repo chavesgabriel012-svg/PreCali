@@ -535,8 +535,8 @@ function parseFinancialDocument(rawText) {
   const debt = strongObligations || 0;
   const confidence = scoreConfidence({ income, document, assetValue, product });
   const warnings = [];
-  if (!document.netIncome && grossIncome) warnings.push("Solo encontre salario bruto; use ese monto como referencia.");
-  if (!document.netIncome && !grossIncome) warnings.push("No encontre ingreso claro en el documento.");
+  if (!document.netIncome && document.grossIncome) warnings.push("Solo encontre salario bruto; use ese monto como referencia.");
+  if (!document.netIncome && !document.grossIncome) warnings.push("No encontre ingreso claro en el documento.");
   if (totalDeductions && !strongObligations) warnings.push("Detecte deducciones, pero no las trate como deuda bancaria sin etiqueta de prestamo/embargo/pension.");
 
   return {
@@ -800,11 +800,18 @@ function cleanName(raw) {
     .split(/\b(?:cedula|identificacion|salario|bruto|neto|patrono|periodo|telefono)\b/i)[0]
     .replace(/\b\d{1,2}[-\s]\d{3,4}[-\s]\d{3,4}\b|\b\d{9,12}\b/g, "")
     .replace(/(?:CRC|COLONES|USD|¢|₡|\$)?\s*\d[\d\s.,']+/gi, "")
-    .replace(/[0-9:;|]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (cleaned.length < 4) return null;
-  return titleCase(cleaned);
+      .replace(/[0-9:;|]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (cleaned.length < 4) return null;
+    if (looksLikeDocumentLabel(cleaned)) return null;
+    return titleCase(cleaned);
+  }
+
+function looksLikeDocumentLabel(value) {
+  return /numero|n[uú]mero|patronal|orden|comprobante|constancia|salario|deduccion|deducci[oó]n|seguro|social|ccss|pagina|fecha|periodo|per[ií]odo/i.test(
+    String(value || "")
+  );
 }
 
 function detectName(lines) {
