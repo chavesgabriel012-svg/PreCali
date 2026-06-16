@@ -202,6 +202,21 @@ function parseProfile(body) {
   };
 }
 
+function coerceProfile(profile) {
+  const source = profile || {};
+  const product = ["personal", "vehiculo", "hipoteca"].includes(source.product) ? source.product : "personal";
+  const defaultYears = product === "hipoteca" ? 30 : product === "personal" ? 5 : 6;
+
+  return {
+    product,
+    income: Math.max(0, Math.round(Number(source.income) || 0)),
+    debt: Math.max(0, Math.round(Number(source.debt) || 0)),
+    downPayment: Math.max(0, Math.round(Number(source.downPayment) || 0)),
+    assetValue: Math.max(0, Math.round(Number(source.assetValue) || 0)),
+    requestedYears: Math.max(1, Math.min(Math.round(Number(source.requestedYears) || defaultYears), 30)),
+  };
+}
+
 function paymentFor(amount, annualRate, years) {
   const months = Math.max(1, Math.round(years * 12));
   const monthlyRate = annualRate / 100 / 12;
@@ -301,6 +316,23 @@ function formatResults(profile, results) {
   return lines.join("\n");
 }
 
+function buildReplyFromProfile(profile, options) {
+  const cleanProfile = coerceProfile(profile);
+  const missing = missingProfileMessage(cleanProfile);
+  const prefixLines = Array.isArray(options && options.prefixLines) ? options.prefixLines.filter(Boolean) : [];
+
+  if (missing) {
+    return {
+      message: prefixLines.length ? prefixLines.concat("", missing).join("\n") : missing,
+    };
+  }
+
+  const message = formatResults(cleanProfile, simulate(cleanProfile));
+  return {
+    message: prefixLines.length ? prefixLines.concat("", message).join("\n") : message,
+  };
+}
+
 function buildReply(input) {
   const body = input && input.body ? String(input.body) : "";
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
@@ -309,7 +341,7 @@ function buildReply(input) {
   if (numMedia > 0) {
     return {
       message:
-        "Recibi tu documento. En este MVP por WhatsApp todavia no leo el archivo completo, pero ya podemos continuar si me escribis ingreso mensual, deudas, monto aproximado, prima y plazo.",
+        "Recibi tu documento. PreCali intenta leerlo localmente si es PDF/DOCX/CSV con texto. Si no sale, escribime ingreso mensual, deudas, monto aproximado, prima y plazo.",
     };
   }
 
@@ -332,7 +364,8 @@ function buildReply(input) {
     return {
       message: [
         "Si ya tenes el documento, mandalo como archivo o foto por este chat.",
-        "En este MVP todavia no lo leo completo, pero ya estamos preparando IA/OCR para extraer ingreso, cedula y patrono automaticamente.",
+        "PreCali puede leer PDF/DOCX/CSV con texto para extraer ingreso, cedula y patrono sin depender de IA.",
+        "Las fotos escaneadas van a ocupar OCR local en el siguiente paso.",
         "",
         "Mientras tanto, podes escribirme: gano 1500000, debo 250000, quiero casa o carro.",
       ].join("\n"),
@@ -369,6 +402,8 @@ function buildReply(input) {
 
 module.exports = {
   buildReply,
+  buildReplyFromProfile,
+  coerceProfile,
   parseProfile,
   simulate,
 };
