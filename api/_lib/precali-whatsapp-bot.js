@@ -113,6 +113,10 @@ function parseAmount(raw) {
   return number;
 }
 
+function hasWrittenAmountCue(text) {
+  return /\b\d[\d.,]*\b/.test(text) || /\b(medio|media|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|seiscientos|setecientos|ochocientos|novecientos)\s+(millones|millon|mill|mil|k|m)\b/.test(text);
+}
+
 function findAmount(text, patterns) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -279,6 +283,13 @@ function missingProfileMessage(profile) {
   ].join("\n");
 }
 
+function likelyDocumentFollowUp(body) {
+  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const mentionsIncomeContext = /(ingreso|ingresos|salario|sueldo|neto|devengo|orden patronal|colilla|boleta|documento|pdf|archivo|adjunto|estos son mis ingresos|te mando)/.test(text);
+  const mentionsIntent = /(carro|auto|vehiculo|veiculo|casa|vivienda|hipoteca|credito|prestamo|financiar)/.test(text);
+  return mentionsIncomeContext && mentionsIntent && !hasWrittenAmountCue(text);
+}
+
 function productTitle(product) {
   if (product === "hipoteca") return "credito hipotecario";
   if (product === "vehiculo") return "credito vehicular";
@@ -302,6 +313,12 @@ function formatResults(profile, results) {
     return lines.join("\n");
   }
 
+  if (results.length === 1) {
+    lines.push("Hoy solo veo una opcion clara con este perfil.");
+    lines.push("Los otros bancos normalmente quedan fuera por ingreso minimo, capacidad de pago o monto financiable.");
+    lines.push("");
+  }
+
   results.slice(0, 4).forEach((result, index) => {
     lines.push(
       `${index + 1}. ${result.bank}`,
@@ -313,6 +330,9 @@ function formatResults(profile, results) {
   });
 
   lines.push("Queres aplicar a alguna opcion? Responde: Aplicar BAC, Aplicar BN, etc.");
+  if ((profile.product === "vehiculo" || profile.product === "hipoteca") && !profile.assetValue) {
+    lines.push("Si me decis el valor del " + (profile.product === "vehiculo" ? "vehiculo" : "bien") + " y la prima, te afino mucho mas la comparativa.");
+  }
   lines.push("MVP: estimacion orientativa. El banco confirma aprobacion, tasa y requisitos finales.");
   return lines.join("\n");
 }
@@ -397,6 +417,15 @@ function buildReply(input) {
   }
 
   const profile = parseProfile(body);
+  if (!profile.income && likelyDocumentFollowUp(body)) {
+    return {
+      message: [
+        "Perfecto. Mandame la orden patronal, colilla o PDF y saco el ingreso desde ahi.",
+        "Si preferis escribirlo, tambien sirve: gano 1500000, no debo nada y quiero un carro.",
+      ].join("\n"),
+    };
+  }
+
   const missing = missingProfileMessage(profile);
   if (missing) return { message: missing };
 
