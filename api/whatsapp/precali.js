@@ -236,15 +236,15 @@ async function buildReplyFromLocalDocument(input) {
   if (documentResult.ok && documentResult.profile && documentResult.profile.income) {
     const contextBody = buildContextBody(input);
     const merged = mergeDocumentAndMessageProfile(documentResult.profile, contextBody);
-    const prefixLines = ["Lector local PreCali: lei el documento sin IA."];
+    const prefixLines = ["Ya leí tu documento."];
     const detected = [];
     for (const note of documentResult.notes || []) {
       if (merged.usedMessageHints.includes("producto") && /^Producto detectado:/i.test(note)) continue;
       detected.push(note);
     }
-    if (merged.usedMessageHints.length) detected.push("Use tu mensaje para: " + merged.usedMessageHints.join(", "));
+    if (merged.usedMessageHints.length) detected.push("Tomé en cuenta tu mensaje para: " + merged.usedMessageHints.join(", "));
     if (contextBody && !String(input.body || "").trim() && readRecentText(input.from)) {
-      detected.push("Tambien tome en cuenta tu mensaje anterior.");
+      detected.push("También tomé en cuenta tu mensaje anterior.");
     }
     if (merged.usedMessageHints.includes("producto")) detected.push("Producto final: " + productLabel(merged.profile.product));
     if (documentResult.document && documentResult.document.strongObligations) {
@@ -312,9 +312,9 @@ module.exports = async function handler(req, res) {
     const rememberedProfile = readRecentProfile(input.from);
     if (!reply && shouldUseRememberedProfile(input, rememberedProfile)) {
       const merged = mergeRememberedProfileWithBody(rememberedProfile, input.body);
-      const prefixLines = ["Tome en cuenta tu chat anterior para recalcular."];
+      const prefixLines = ["Recalculé con lo nuevo que me dijiste."];
       if (merged.usedMessageHints.length) {
-        prefixLines.push("Actualice: " + merged.usedMessageHints.join(", ") + ".");
+        prefixLines.push("Actualicé: " + merged.usedMessageHints.join(", ") + ".");
       }
       rememberRecentProfile(input.from, merged.profile, buildContextBody(input));
       usedRememberedProfile = true;
@@ -327,7 +327,7 @@ module.exports = async function handler(req, res) {
         const prefixLines = [];
 
         if (ai && ai.confidence >= 0.45) {
-          prefixLines.push("IA PreCali: lei tu mensaje" + (Number(input.numMedia || 0) > 0 ? " y el documento" : "") + ".");
+          prefixLines.push("Ya entendí tu mensaje" + (Number(input.numMedia || 0) > 0 ? " y el documento" : "") + ".");
 
           if (ai.document && (ai.document.name || ai.document.idNumber || ai.document.employer || ai.document.netIncome)) {
             const detected = [];

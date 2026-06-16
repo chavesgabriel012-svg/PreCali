@@ -169,14 +169,16 @@ function parseProfile(body) {
     ]);
 
   const debt =
-    amountAfter(
-      text,
-      ["debo", "debemos", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos"],
-      ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
-    ) ||
-    findAmount(text, [
-      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de deuda|en deudas|de pagos|en pagos)/,
-    ]);
+    /(no debo|sin deudas?|deuda cero)/.test(text)
+      ? 0
+      : amountAfter(
+          text,
+          ["debo", "debemos", "deuda", "deudas", "pago", "pagos", "cuotas", "rebajos"],
+          ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor", "tengo"]
+        ) ||
+        findAmount(text, [
+          /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de deuda|en deudas|de pagos|en pagos)/,
+        ]);
 
   const downPayment =
     amountAfter(
@@ -275,16 +277,23 @@ function simulate(profile) {
 }
 
 function missingProfileMessage(profile) {
-  const missing = [];
-  if (!profile.income) missing.push("ingreso mensual");
-  if (missing.length === 0) return "";
+  if (!profile.income) {
+    return [
+      "Necesito un dato para seguir.",
+      "Tu ingreso mensual aproximado.",
+      closingQuestion("¿Cuánto ganás al mes?"),
+    ].join("\n");
+  }
 
-  return [
-    "Para calcularte bien necesito: " + missing.join(", ") + ".",
-    "Ejemplo:",
-    "Gano 1500000, debo 250000, quiero vehiculo de 15000000, tengo 2000000 de prima, a 6 anos.",
-    "Tambien podes decir: gano 2 millones, debo 400 mil y quiero prestamo para casa.",
-  ].join("\n");
+  if (profile.product !== "personal" && !profile.downPayment) {
+    return [
+      "Vamos bien.",
+      "Ahora necesito tu prima aproximada.",
+      closingQuestion("¿Con cuánto contás de prima?"),
+    ].join("\n");
+  }
+
+  return "";
 }
 
 function likelyDocumentFollowUp(body) {
@@ -304,21 +313,87 @@ function assetLabel(product) {
   return product === "vehiculo" ? "vehiculo" : "bien";
 }
 
+function bold(value) {
+  return `*${value}*`;
+}
+
+function closingQuestion(question) {
+  return bold(question);
+}
+
+function hasDebtSignal(text) {
+  return /(debo|debemos|deuda|deudas|pago|pagos|cuotas|rebajos|no debo|sin deudas?|deuda cero)/.test(text);
+}
+
+function hasDownPaymentSignal(text) {
+  return /(prima|enganche|aporte)/.test(text);
+}
+
+function detectRequestedBank(text) {
+  if (/\bbac\b|bac credomatic/.test(text)) return "BAC";
+  if (/\bbn\b|banco nacional/.test(text)) return "Banco Nacional";
+  if (/promerica/.test(text)) return "Promerica";
+  if (/lafise/.test(text)) return "Lafise";
+  if (/davi/.test(text)) return "DaviBank";
+  return "";
+}
+
+function affordabilityGuidance(profile) {
+  if (profile.product === "personal") return "";
+
+  const conditions = BANKS.map((bank) => ({ bank: bank.name, condition: bank[profile.product] })).filter((item) => item.condition);
+  if (!conditions.length) return "";
+
+  const requestedAmount = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
+  let best = null;
+
+  for (const item of conditions) {
+    const years = Math.min(profile.requestedYears, item.condition.maxYears);
+    const targetAmount = requestedAmount || item.condition.minAmount;
+    const neededPayment = paymentFor(targetAmount, item.condition.rate, years);
+    const neededIncome = Math.ceil((neededPayment + profile.debt) / item.condition.ratio);
+    const extraIncome = Math.max(0, neededIncome - profile.income);
+    const financeLimit = profile.assetValue ? profile.assetValue * (item.condition.finance || 0.85) : 0;
+    const capacity = Math.max(0, profile.income * item.condition.ratio - profile.debt);
+    const capacityAmount = amountForPayment(capacity, item.condition.rate, years);
+    const extraDownPayment = profile.assetValue
+      ? Math.max(0, requestedAmount - Math.min(capacityAmount, financeLimit))
+      : 0;
+
+    if (!best || extraIncome < best.extraIncome) {
+      best = { bank: item.bank, extraIncome, extraDownPayment };
+    }
+  }
+
+  if (!best) return "";
+  if (best.extraIncome > 0 && best.extraDownPayment > 0) {
+    return `Te ayudaría subir ingresos en ${bold(money(best.extraIncome))} o la prima en ${bold(money(best.extraDownPayment))}.`;
+  }
+  if (best.extraIncome > 0) {
+    return `Te ayudaría subir ingresos en ${bold(money(best.extraIncome))}.`;
+  }
+  if (best.extraDownPayment > 0) {
+    return `Te ayudaría subir la prima en ${bold(money(best.extraDownPayment))}.`;
+  }
+  return "";
+}
+
 function documentFollowUpMessage(profile) {
   const hints = [];
-  if (profile.product === "vehiculo") hints.push("que buscas carro");
-  if (profile.product === "hipoteca") hints.push("que buscas casa");
-  if (profile.assetValue) hints.push("un monto meta de " + money(profile.assetValue));
-  if (profile.downPayment) hints.push("una prima de " + money(profile.downPayment));
-  if (profile.debt) hints.push("deudas por " + money(profile.debt));
+  if (profile.product === "vehiculo") hints.push("buscás carro");
+  if (profile.product === "hipoteca") hints.push("buscás casa");
+  if (profile.assetValue) hints.push("un valor meta de " + bold(money(profile.assetValue)));
+  if (profile.downPayment) hints.push("una prima de " + bold(money(profile.downPayment)));
+  if (profile.debt) hints.push("deudas por " + bold(money(profile.debt)));
 
   const secondLine = hints.length
-    ? "Ya tengo presente " + hints.join(", ") + "."
-    : "Ya tengo presente si es casa o carro y cualquier monto, prima o deuda que me hayas dicho.";
+    ? "Ya tengo presente que " + hints.join(", ") + "."
+    : "Ya tengo claro si buscás casa o carro.";
 
   return [
-    "Perfecto. Mandame la orden patronal, colilla o PDF y saco el ingreso desde ahi.",
+    "Perfecto. Mandame la orden patronal o PDF.",
     secondLine,
+    closingQuestion("¿Me lo enviás ahora?"),
   ].join("\n");
 }
 
@@ -326,47 +401,50 @@ function formatResults(profile, results) {
   const hasAssetContext = profile.product !== "personal";
   const hasDownPaymentOnly = hasAssetContext && profile.downPayment > 0 && !profile.assetValue;
   const lines = [
-    "PreCali - comparativa preliminar",
-    "Producto: " + productTitle(profile.product),
-    "Ingreso: " + money(profile.income) + " | Deudas: " + money(profile.debt),
+    bold("Precalificacion estimada"),
+    "Producto: " + bold(productTitle(profile.product)),
+    "Ingreso: " + bold(money(profile.income)),
+    "Deudas: " + bold(money(profile.debt)),
     profile.assetValue
-      ? "Valor de referencia: " + money(profile.assetValue) + (profile.downPayment ? " | Prima: " + money(profile.downPayment) : "")
+      ? "Valor de referencia: " + bold(money(profile.assetValue)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment)) : "")
       : hasDownPaymentOnly
-        ? "Sin valor del bien: estimo el monto maximo segun capacidad de pago. Prima detectada: " + money(profile.downPayment) + "."
+        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment)) + "."
         : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
     "",
   ];
 
   if (!results.length) {
     lines.push(profile.downPayment && hasAssetContext
-      ? "Ya tome en cuenta tu prima de " + money(profile.downPayment) + ", pero con estos datos no encontre una opcion clara."
+      ? "Ya tomé en cuenta tu prima de " + bold(money(profile.downPayment)) + "."
       : "Con esos datos no encontre una opcion clara.");
-    lines.push("Probemos bajando monto, subiendo prima, ampliando plazo o revisando deudas mensuales.");
+    lines.push(affordabilityGuidance(profile) || "Probemos con más prima o menos monto.");
+    lines.push("Esto es una precalificación estimada.");
+    lines.push(closingQuestion("¿Querés que te diga cuánto prima te faltaría?"));
     return lines.join("\n");
   }
 
   if (results.length === 1) {
-    lines.push("Hoy solo veo una opcion clara con este perfil.");
-    lines.push("Los otros bancos normalmente quedan fuera por ingreso minimo, capacidad de pago o monto financiable.");
+    lines.push("Hoy veo una opción clara con tu perfil.");
+    lines.push("Las demás quedan cortas en política o capacidad.");
     lines.push("");
   }
 
   results.slice(0, 4).forEach((result, index) => {
     lines.push(
-      `${index + 1}. ${result.bank}`,
-      `Tasa: ${result.rate.toFixed(2)}% | Plazo: ${result.years} anos`,
-      `${profile.assetValue ? "Monto financiado" : "Monto maximo estimado"}: ${money(result.amount)}`,
-      hasDownPaymentOnly ? `Valor total aprox con prima: ${money(result.amount + profile.downPayment)}` : null,
-      `Cuota aprox: ${money(result.payment)}`,
+      `${index + 1}. ${bold(result.bank)}`,
+      `Tasa: ${bold(result.rate.toFixed(2) + "%")} | Plazo: ${bold(result.years + " anos")}`,
+      `${profile.assetValue ? "Monto financiado" : "Monto estimado"}: ${bold(money(result.amount))}`,
+      hasDownPaymentOnly ? `Valor total aprox: ${bold(money(result.amount + profile.downPayment))}` : null,
+      `Cuota aprox: ${bold(money(result.payment))}`,
       ""
     );
   });
 
-  lines.push("Queres aplicar a alguna opcion? Responde: Aplicar BAC, Aplicar BN, etc.");
+  lines.push("Esto es una precalificación estimada.");
   if ((profile.product === "vehiculo" || profile.product === "hipoteca") && !profile.assetValue) {
-    lines.push("Si me decis el valor del " + assetLabel(profile.product) + (profile.downPayment ? ", te digo cuanto te financiarian exactamente." : " y la prima, te afino mucho mas la comparativa."));
+    lines.push("Si me decís el valor del " + assetLabel(profile.product) + ", afino la cuota real.");
   }
-  lines.push("MVP: estimacion orientativa. El banco confirma aprobacion, tasa y requisitos finales.");
+  lines.push(closingQuestion("¿Cuál opción se ajusta mejor a tu cuota mensual?"));
   return lines.filter(Boolean).join("\n");
 }
 
@@ -394,8 +472,11 @@ function buildReply(input) {
 
   if (numMedia > 0) {
     return {
-      message:
-        "Recibi tu documento. PreCali intenta leerlo localmente si es PDF/DOCX/CSV con texto. Si no sale, escribime ingreso mensual, deudas, monto aproximado, prima y plazo.",
+      message: [
+        "Recibí tu documento.",
+        "Voy a leer ingresos y rebajos.",
+        closingQuestion("¿Buscás casa, carro o préstamo personal?"),
+      ].join("\n"),
     };
   }
 
@@ -404,14 +485,9 @@ function buildReply(input) {
   if (!text || (/^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)\b/.test(text) && !hasFinancialIntent)) {
     return {
       message: [
-        "Hola, soy PreCali por WhatsApp.",
-        "Mandame tus datos y te comparo opciones en segundos.",
-        "",
-        "Ejemplo carro:",
-        "Gano 1500000, debo 250000, quiero vehiculo de 15000000, tengo 2000000 de prima, a 6 anos.",
-        "",
-        "Ejemplo casa:",
-        "Gano 2 millones, debo 400 mil y quiero prestamo para casa.",
+        "Hola. Soy " + bold("PreCali IA") + ".",
+        "Te ayudo a precalificar y aplicar.",
+        closingQuestion("¿Buscás casa, carro o préstamo personal?"),
       ].join("\n"),
     };
   }
@@ -428,33 +504,64 @@ function buildReply(input) {
   if (/(pdf|documento|orden|patronal|boleta|colilla|foto|imagen|adjunto|archivo)/.test(text) && !/(gano|ingreso|salario|sueldo|neto)/.test(text)) {
     return {
       message: [
-        "Si ya tenes el documento, mandalo como archivo o foto por este chat.",
-        "PreCali puede leer PDF/DOCX/CSV con texto para extraer ingreso, cedula y patrono sin depender de IA.",
-        "Las fotos escaneadas van a ocupar OCR local en el siguiente paso.",
-        "",
-        "Mientras tanto, podes escribirme: gano 1500000, debo 250000, quiero casa o carro.",
+        "Mandamelo por este chat.",
+        "Leo PDF con texto y orden patronal.",
+        closingQuestion("¿Querés simular casa o carro?"),
       ].join("\n"),
     };
   }
 
   if (/(aplicar|solicitar|me interesa|quiero esa|enviar|mandar|banco)/.test(text) && !/(gano|ingreso|salario|sueldo)/.test(text)) {
+    const bank = detectRequestedBank(text);
     return {
       message: [
-        "Perfecto. Para aplicar normalmente necesitarias:",
-        "- Cedula vigente",
-        "- Orden patronal o constancia de ingresos",
-        "- Estados de cuenta recientes",
-        "- Proforma o datos del bien si aplica",
-        "",
-        "En el MVP todavia no enviamos al banco automaticamente. El siguiente paso sera conectar convenios, buro y estado de aprobacion.",
+        bank ? `Perfecto. Seguimos con ${bold(bank)}.` : "Perfecto. Ya casi aplicamos.",
+        "El siguiente paso pide tu consentimiento digital.",
+        "Con eso validamos tu perfil real con el banco.",
+        "Puede incluir revisión suave o formal.",
+        closingQuestion(bank ? `¿Te envío el consentimiento para ${bank}?` : "¿Con cuál banco querés aplicar?"),
       ].join("\n"),
     };
   }
 
   if (/(estado|aprobado|rechazado|seguimiento)/.test(text)) {
     return {
-      message:
-        "El flujo final seria: PreCali te avisa por WhatsApp cuando el banco responda. Ejemplo: Tu credito fue aprobado; el banco se contactara con vos en las proximas horas.",
+      message: [
+        "Estoy encima de tu trámite.",
+        "Los estados pueden ser: En análisis, Aprobado o Faltan documentos.",
+        "Te avisaré apenas cambie algo.",
+        closingQuestion("¿Querés revisar si falta algún documento?"),
+      ].join("\n"),
+    };
+  }
+
+  if (profile.product === "personal" && !/(personal|consumo|libre inversion|gastos personales)/.test(text) && !profile.income) {
+    return {
+      message: [
+        "Empecemos por el producto.",
+        "Puedo ayudarte con casa, carro o personal.",
+        closingQuestion("¿Qué querés simular hoy?"),
+      ].join("\n"),
+    };
+  }
+
+  if (profile.product !== "personal" && profile.income && !hasDebtSignal(text)) {
+    return {
+      message: [
+        "Perfecto. Ya tengo tu ingreso.",
+        "Ahora necesito tus deudas mensuales.",
+        closingQuestion("¿Pagás alguna cuota hoy?"),
+      ].join("\n"),
+    };
+  }
+
+  if (profile.product !== "personal" && profile.income && hasDebtSignal(text) && !hasDownPaymentSignal(text) && !profile.downPayment) {
+    return {
+      message: [
+        "Bien. Ya tengo ingreso y deudas.",
+        "Ahora necesito tu prima aproximada.",
+        closingQuestion("¿Con cuánto contás de prima?"),
+      ].join("\n"),
     };
   }
 
