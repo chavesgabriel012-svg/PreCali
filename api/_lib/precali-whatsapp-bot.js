@@ -45,7 +45,7 @@ const COUNTRY_CONFIG = {
   US: { currency: "USD", locale: "en-US", scale: 540 },
 };
 
-const AMOUNT_PATTERN = /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/;
+const AMOUNT_PATTERN = /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m)\b)?)/;
 
 function normalize(text) {
   return String(text || "")
@@ -108,13 +108,15 @@ function normalizeTypos(text) {
 }
 
 function detectCountry(text) {
-  if (/\busd\b|dolares?|\$/.test(text)) return "US";
   if (/\bmexico\b|\bmx\b/.test(text)) return "MX";
+  if (/\bpesos\b|\bmxn\b/.test(text)) return "MX";
   if (/\bguatemala\b|\bgt\b/.test(text)) return "GT";
+  if (/\bquetzales\b|\bgtq\b/.test(text)) return "GT";
   if (/\bpanama\b|\bpa\b/.test(text)) return "PA";
   if (/\bhonduras\b|\bhn\b/.test(text)) return "HN";
   if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
   if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
+  if (/\busd\b|dolares?|\$/.test(text)) return "US";
   return "CR";
 }
 
@@ -190,12 +192,13 @@ function parseProfile(body) {
   const income =
     amountAfter(
       text,
-      ["gano", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "me quedan libres", "me quedan", "recibo"],
+      ["gano", "gana", "ganamos", "ganan", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "me quedan libres", "me quedan", "recibo"],
       ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
     ) ||
     findAmount(text, [
       /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de ingreso|de salario|netos|mensuales)/,
       /gano[^\d]{0,20}\$?([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/,
+      /gana[^\d]{0,20}\$?([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/,
     ]);
 
   const debt =
@@ -225,7 +228,7 @@ function parseProfile(body) {
   const rawAssetValue =
     amountAfter(
       text,
-      ["valor", "monto", "hipoteca", "hipotecario", "casa", "vivienda", "propiedad", "apartamento", "apto", "lote", "terreno", "carro", "auto", "vehiculo", "veiculo", "prestamo", "credito", "financiar", "financiamiento", "ocupo", "necesito", "nesesito"],
+      ["valor", "monto", "vale", "cuesta", "hipoteca", "hipotecario", "casa", "vivienda", "propiedad", "apartamento", "apto", "lote", "terreno", "carro", "auto", "vehiculo", "veiculo", "prestamo", "credito", "financiar", "financiamiento", "ocupo", "necesito", "nesesito"],
       ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte"]
     );
   const assetValue = rawAssetValue >= 100000 ? rawAssetValue : 0;
@@ -497,9 +500,42 @@ function lowDownPaymentInsight(profile) {
   return `Tu prima cubre cerca de ${bold(percent + "%")} del ${range.asset}. Lo usual es ver entre ${bold(Math.round(range.min * 100) + "%")} y ${bold(Math.round(range.max * 100) + "%")} en ${range.market}.`;
 }
 
+function needsDownPaymentRealityCheck(profile) {
+  return profile.product === "hipoteca" && profile.assetValue > 0 && profile.downPayment > 0 && (profile.downPayment / Math.max(profile.assetValue, 1)) < 0.05;
+}
+
+function recommendedOption(results, profile) {
+  if (!results.length) return null;
+  const netIncome = Math.max(1, profile.income - profile.debt);
+  const affordable = results
+    .map((result) => ({ result, burden: result.payment / netIncome }))
+    .filter((item) => item.burden <= 0.35)
+    .sort((a, b) => a.burden - b.burden || a.result.rate - b.result.rate);
+  if (affordable.length) return affordable[0].result;
+  return results.slice().sort((a, b) => a.payment - b.payment || a.rate - b.rate)[0];
+}
+
 function buildFollowUpReply(profile, results, analysis, body) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const best = results[0] || null;
+
+  if (/(hard pull|consulta dura|revision dura|bur[oó]|buro)/.test(text) && !/(soft pull|consulta suave)/.test(text)) {
+    return [
+      "Buena duda.",
+      "Un hard pull es una revision formal de tu historial.",
+      "Puede mover un poco tu buro por un tiempo corto.",
+      closingQuestion("Queres que primero prioricemos bancos que arranquen con validacion suave?"),
+    ].join("\n");
+  }
+
+  if (/(soft pull|consulta suave|validacion suave)/.test(text)) {
+    return [
+      "Si, podemos ir por esa ruta primero.",
+      `Mantengo tu ingreso de ${bold(money(profile.income, profile.country))} y ${profile.downPayment ? "tu prima de " + bold(money(profile.downPayment, profile.country)) : "tu perfil actual"} para esa comparacion.`,
+      "La idea es precalificar primero y dejar la revision formal para despues.",
+      closingQuestion("Queres que te deje primero el escenario mas cuidadoso con tu buro?"),
+    ].join("\n");
+  }
 
   if (/(incluye|trae|lleva).{0,18}(seguros?|seguro|poliza|marchamo|gastos)/.test(text)) {
     return [
@@ -508,7 +544,7 @@ function buildFollowUpReply(profile, results, analysis, body) {
         ? `La cuota de ${bold(money(best.payment, profile.country))} es una base estimada del credito.`
         : "La cuota que te mostre es una base estimada del credito.",
       "Todavia no estoy metiendo seguros, comisiones ni gastos finales del banco.",
-      closingQuestion(profile.product === "vehiculo" ? "Â¿QuerÃ©s que la deje mÃ¡s conservadora sumando seguros estimados?" : "Â¿QuerÃ©s que la deje mÃ¡s conservadora sumando seguros y gastos estimados?"),
+      closingQuestion(profile.product === "vehiculo" ? "Queres que la deje mas conservadora sumando seguros estimados?" : "Queres que la deje mas conservadora sumando seguros y gastos estimados?"),
     ].join("\n");
   }
 
@@ -518,7 +554,7 @@ function buildFollowUpReply(profile, results, analysis, body) {
       "Claro que si.",
       "Si bajas el plazo, la cuota sube.",
       "Si lo alargas, la cuota baja pero pagas mas intereses.",
-      closingQuestion(`Â¿QuerÃ©s que te lo recalcule a ${ranges}?`),
+      closingQuestion(`Queres que te lo recalcule a ${ranges}?`),
     ].join("\n");
   }
 
@@ -538,9 +574,22 @@ function buildFollowUpReply(profile, results, analysis, body) {
     }
 
     lines.push(closingQuestion(profile.product === "vehiculo"
-      ? "Â¿Tenes visto algun modelo o precio de carro para calcular la prima exacta que te pediria el banco?"
-      : "Â¿Tenes visto el valor de la casa para calcular la prima exacta y la cuota mas realista?"));
+      ? "Tenes visto algun modelo o precio de carro para calcular la prima exacta que te pediria el banco?"
+      : "Tenes visto el valor de la casa para calcular la prima exacta y la cuota mas realista?"));
     return lines.join("\n");
+  }
+
+  if (/(cual|cu[aá]l).{0,20}(me conviene|conviene mas|conviene más|a ojos cerrados|mejor)\b/.test(text) && results.length) {
+    const choice = recommendedOption(results, profile);
+    const burden = choice ? Math.round((choice.payment / Math.max(1, profile.income - profile.debt)) * 100) : 0;
+    return [
+      "Yo no me iria solo por la tasa.",
+      choice
+        ? `${bold(choice.bank)} se ve mas sano porque deja una cuota cerca de ${bold(burden + "%")} de tu ingreso neto.`
+        : "Prefiero la opcion que mejor cuide tu cuota mensual.",
+      "Eso normalmente pesa mas que ahorrar unas decimas en la tasa si el presupuesto queda apretado.",
+      closingQuestion("Queres que te ordene las opciones por cuota mas comoda en vez de tasa?"),
+    ].join("\n");
   }
 
   return "";
@@ -736,6 +785,7 @@ function formatResults(profile, results, analysis) {
   const netIncome = Math.max(0, profile.income - profile.debt);
   const targetLoan = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
   const intro = analysis ? buildDiagnosticIntro(analysis) : "";
+  const realityCheck = needsDownPaymentRealityCheck(profile);
   const lines = [
     intro || null,
     bold("Precalificacion estimada"),
@@ -748,7 +798,7 @@ function formatResults(profile, results, analysis) {
       : hasDownPaymentOnly
         ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile.country)) + "."
         : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
-    lowDownPaymentInsight(profile) || null,
+    !realityCheck ? lowDownPaymentInsight(profile) || null : null,
     hasDownPaymentOnly ? "Tomo en cuenta tu capacidad y el porcentaje maximo que financia cada banco." : null,
     hasDownPaymentOnly ? "Aqui el monto es " + bold("prestamo maximo") + ", no el valor total del bien." : null,
     "",
@@ -758,6 +808,18 @@ function formatResults(profile, results, analysis) {
     lines.push("No puedo simular con ingreso neto en cero.");
     lines.push("Primero hay que bajar deudas o subir ingreso.");
     lines.push(closingQuestion("¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
+    return lines.join("\n");
+  }
+
+  if (realityCheck) {
+    const minPrime = Math.round(profile.assetValue * 0.1);
+    const comfortablePrime = Math.round(profile.assetValue * 0.2);
+    lines.push("Antes de simular fino, te aterrizo algo importante.");
+    lines.push(lowDownPaymentInsight(profile));
+    lines.push(`Para ese valor, la banca normalmente te pediria entre ${bold(money(minPrime, profile.country))} y ${bold(money(comfortablePrime, profile.country))} de prima.`);
+    lines.push("Con esa prima actual, hoy te expones a un rechazo temprano.");
+    lines.push("Esto es una precalificacion estimada.");
+    lines.push(closingQuestion("Queres que coticemos una propiedad menor o armamos un plan de ahorro para llegar a esa prima?"));
     return lines.join("\n");
   }
 
@@ -807,7 +869,9 @@ function formatResults(profile, results, analysis) {
 
 function buildReplyFromProfile(profile, options) {
   const cleanProfile = coerceProfile(profile);
-  const missing = missingProfileMessage(cleanProfile);
+  const allowEstimateWithoutDownPayment = Boolean(options && options.allowEstimateWithoutDownPayment);
+  const rawMissing = missingProfileMessage(cleanProfile);
+  const missing = allowEstimateWithoutDownPayment && /prima/i.test(rawMissing) ? "" : rawMissing;
   const prefixLines = Array.isArray(options && options.prefixLines) ? options.prefixLines.filter(Boolean) : [];
   const followUpBody = options && options.followUpBody ? String(options.followUpBody) : "";
   const analysis = options && options.analysis ? options.analysis : detectApplicantContext(followUpBody, cleanProfile);

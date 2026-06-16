@@ -128,8 +128,21 @@ function normalizeForIntent(value) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function explicitCountryFromBody(body) {
+  const text = normalizeForIntent(body);
+  if (/\bmexico\b|\bmx\b|\bpesos\b|\bmxn\b/.test(text)) return "MX";
+  if (/\bguatemala\b|\bgt\b|\bquetzales\b|\bgtq\b/.test(text)) return "GT";
+  if (/\bpanama\b|\bpa\b/.test(text)) return "PA";
+  if (/\bhonduras\b|\bhn\b/.test(text)) return "HN";
+  if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
+  if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
+  if (/\busd\b|dolares?\b/.test(text)) return "US";
+  return "";
+}
+
 function explicitProductFromBody(body) {
   const text = normalizeForIntent(body);
+  if (/(de un prestamo personal|de una deuda personal|deuda personal|tarjeta de credito|deuda de tarjeta)/.test(text)) return "";
   if (/(casa|vivienda|hipoteca|hipotecario|apartamento|apto|lote|terreno|propiedad|inmueble)/.test(text)) return "hipoteca";
   if (/(carro|auto|vehiculo|veiculo|vehicular|moto|prendario|pickup|pick up|camioneta)/.test(text)) return "vehiculo";
   if (/(personal|consumo|libre inversion|gastos personales)/.test(text)) return "personal";
@@ -148,13 +161,23 @@ function bodyHasDebtZeroHint(body) {
   return /\b(no debo|sin deudas?|deuda cero|deudas? en 0)\b/.test(normalizeForIntent(body));
 }
 
+function bodyHasDebtClearedHint(body) {
+  return /\b(termino de pagar|terminarla de pagar|la termino de pagar|la pago este mes|la cancelo este mes|quedo libre de deuda|salgo de esa deuda|ya no pagaria esa deuda)\b/.test(normalizeForIntent(body));
+}
+
+function bodyAddsCoBorrower(body) {
+  return /\b(sumamos|agregamos|metemos|incluimos|mi esposa|mi esposa gana|mi esposo|mi pareja|co-deudor|co deudor|copropietario|co-propietario|entre los dos|adicionales)\b/.test(normalizeForIntent(body));
+}
+
 function mergeDocumentAndMessageProfile(documentProfile, body) {
   const doc = documentProfile || {};
   const bodyProfile = parseProfile(body || "");
   const productHint = explicitProductFromBody(body);
+  const countryHint = explicitCountryFromBody(body);
   const notes = [];
 
   const merged = {
+    country: countryHint || doc.country || bodyProfile.country || "CR",
     product: productHint || doc.product || bodyProfile.product || "personal",
     income: Number(doc.income) || Number(bodyProfile.income) || 0,
     debt: Math.max(Number(doc.debt) || 0, bodyProfile.debt >= 10000 ? Number(bodyProfile.debt) || 0 : 0),
@@ -220,6 +243,7 @@ function shouldUseRememberedProfile(input, rememberedProfile) {
   if (current.income) return hasFollowUpCue || hasValidationQuestion;
   if (current.downPayment >= 10000 || current.assetValue >= 100000 || current.debt >= 10000) return true;
   if (bodyHasDebtZeroHint(body)) return true;
+  if (bodyHasDebtClearedHint(body)) return true;
   if (explicitProductFromBody(body)) return true;
   if (bodyHasYearHint(body)) return true;
   return hasFollowUpCue || hasValidationQuestion || /\b(con|para|prima|monto|valor|plazo|anos|ano|carro|casa|vehiculo|hipoteca|deuda|deudas|cuota)\b/.test(normalized);
@@ -229,24 +253,32 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   const remembered = coerceProfile(rememberedProfile);
   const current = parseProfile(body || "");
   const explicitProduct = explicitProductFromBody(body);
+  const explicitCountry = explicitCountryFromBody(body);
   const product = explicitProduct || remembered.product || current.product || "personal";
   const productChanged = product !== remembered.product;
+  const debtCleared = bodyHasDebtZeroHint(body) || bodyHasDebtClearedHint(body);
+  const addCoBorrower = bodyAddsCoBorrower(body) && current.income;
   const notes = [];
 
   const merged = {
+    country: explicitCountry || remembered.country || current.country || "CR",
     product,
-    income: current.income || remembered.income || 0,
-    debt: bodyHasDebtZeroHint(body) ? 0 : current.debt >= 10000 ? current.debt : remembered.debt || 0,
+    income: addCoBorrower ? (remembered.income || 0) + current.income : current.income || remembered.income || 0,
+    debt: debtCleared ? 0 : current.debt >= 10000 ? current.debt : remembered.debt || 0,
     downPayment: current.downPayment >= 10000 ? current.downPayment : remembered.downPayment || 0,
     assetValue: current.assetValue >= 100000 ? current.assetValue : productChanged ? 0 : remembered.assetValue || 0,
     requestedYears: bodyHasYearHint(body) ? current.requestedYears : productChanged ? defaultYearsForProduct(product) : remembered.requestedYears || defaultYearsForProduct(product),
   };
 
   if (productChanged) notes.push("producto");
-  if (current.income) notes.push("ingreso");
+  if (addCoBorrower) {
+    notes.push("ingreso mancomunado");
+  } else if (current.income) {
+    notes.push("ingreso");
+  }
   if (current.assetValue >= 100000) notes.push("monto");
   if (current.downPayment >= 10000) notes.push("prima");
-  if (current.debt >= 10000 || bodyHasDebtZeroHint(body)) notes.push("deudas");
+  if (current.debt >= 10000 || debtCleared) notes.push("deudas");
   if (bodyHasYearHint(body)) notes.push("plazo");
 
   return { profile: merged, usedMessageHints: notes };
@@ -343,7 +375,11 @@ module.exports = async function handler(req, res) {
       }
       rememberRecentProfile(input.from, merged.profile, buildContextBody(input));
       usedRememberedProfile = true;
-      reply = buildReplyFromProfile(merged.profile, { prefixLines, followUpBody: input.body });
+      reply = buildReplyFromProfile(merged.profile, {
+        prefixLines,
+        followUpBody: input.body,
+        allowEstimateWithoutDownPayment: true,
+      });
     }
 
     if (!reply && shouldUseAiForMessage(input)) {
