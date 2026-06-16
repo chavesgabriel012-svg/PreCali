@@ -481,6 +481,71 @@ function defaultNextQuestion(analysis) {
   return "¿Te hace sentido este plan o prefieres que exploremos bancos que acepten ingresos de co-propietarios como tu pareja?";
 }
 
+function recommendedDownPaymentRange(product) {
+  if (product === "vehiculo") return { min: 0.1, max: 0.2, asset: "vehiculo", market: "vehiculos" };
+  if (product === "hipoteca") return { min: 0.1, max: 0.2, asset: "bien", market: "vivienda" };
+  return null;
+}
+
+function lowDownPaymentInsight(profile) {
+  if (!profile.assetValue || !profile.downPayment || profile.product === "personal") return "";
+  const range = recommendedDownPaymentRange(profile.product);
+  if (!range) return "";
+  const share = profile.downPayment / Math.max(profile.assetValue, 1);
+  if (share >= range.min) return "";
+  const percent = Math.max(1, Math.round(share * 100));
+  return `Tu prima cubre cerca de ${bold(percent + "%")} del ${range.asset}. Lo usual es ver entre ${bold(Math.round(range.min * 100) + "%")} y ${bold(Math.round(range.max * 100) + "%")} en ${range.market}.`;
+}
+
+function buildFollowUpReply(profile, results, analysis, body) {
+  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const best = results[0] || null;
+
+  if (/(incluye|trae|lleva).{0,18}(seguros?|seguro|poliza|marchamo|gastos)/.test(text)) {
+    return [
+      "Es una muy buena pregunta.",
+      best
+        ? `La cuota de ${bold(money(best.payment, profile.country))} es una base estimada del credito.`
+        : "La cuota que te mostre es una base estimada del credito.",
+      "Todavia no estoy metiendo seguros, comisiones ni gastos finales del banco.",
+      closingQuestion(profile.product === "vehiculo" ? "Â¿QuerÃ©s que la deje mÃ¡s conservadora sumando seguros estimados?" : "Â¿QuerÃ©s que la deje mÃ¡s conservadora sumando seguros y gastos estimados?"),
+    ].join("\n");
+  }
+
+  if (/(puedo|se puede|podria).{0,18}(bajar|subir|cambiar).{0,18}(anos|ano|anios|plazo)|\bmas corto\b|\bmas largo\b/.test(text) && !/(\d{1,2})\s*(anos|ano|anios)/.test(text)) {
+    const ranges = profile.product === "hipoteca" ? "20, 25 o 30 anos" : profile.product === "vehiculo" ? "5, 6 o 7 anos" : "3, 4 o 5 anos";
+    return [
+      "Claro que si.",
+      "Si bajas el plazo, la cuota sube.",
+      "Si lo alargas, la cuota baja pero pagas mas intereses.",
+      closingQuestion(`Â¿QuerÃ©s que te lo recalcule a ${ranges}?`),
+    ].join("\n");
+  }
+
+  if (/\b(tanto|ese monto|ese maximo|esa prima|con esa prima|me prestarian tanto|te parece mucho|demasiado)\b/.test(text)) {
+    const lines = [
+      "Es una excelente pregunta.",
+      `Ese techo se basa en tu ingreso de ${bold(money(profile.income, profile.country))} y deudas de ${bold(money(profile.debt, profile.country))}.`,
+    ];
+
+    if (profile.assetValue && profile.downPayment) {
+      lines.push(lowDownPaymentInsight(profile) || `Con la prima de ${bold(money(profile.downPayment, profile.country))}, el banco revisa si el porcentaje que aportas calza con su politica.`);
+    } else if (profile.downPayment && profile.product !== "personal") {
+      lines.push(`Con una prima de ${bold(money(profile.downPayment, profile.country))}, tambien pesa cuanto porcentaje del ${profile.product === "vehiculo" ? "carro" : "bien"} estas poniendo.`);
+      lines.push(profile.product === "vehiculo"
+        ? `En vehiculos, lo normal es ver entre ${bold("10%")} y ${bold("20%")} de prima.`
+        : `En vivienda, muchos bancos se sienten mas comodos desde ${bold("10%")} de prima hacia arriba.`);
+    }
+
+    lines.push(closingQuestion(profile.product === "vehiculo"
+      ? "Â¿Tenes visto algun modelo o precio de carro para calcular la prima exacta que te pediria el banco?"
+      : "Â¿Tenes visto el valor de la casa para calcular la prima exacta y la cuota mas realista?"));
+    return lines.join("\n");
+  }
+
+  return "";
+}
+
 function buildSpecialistStepMessage(profile, analysis, text) {
   if (analysis.blemishedCredit && !profile.income) {
     return [
@@ -683,6 +748,7 @@ function formatResults(profile, results, analysis) {
       : hasDownPaymentOnly
         ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile.country)) + "."
         : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
+    lowDownPaymentInsight(profile) || null,
     hasDownPaymentOnly ? "Tomo en cuenta tu capacidad y el porcentaje maximo que financia cada banco." : null,
     hasDownPaymentOnly ? "Aqui el monto es " + bold("prestamo maximo") + ", no el valor total del bien." : null,
     "",
@@ -743,7 +809,8 @@ function buildReplyFromProfile(profile, options) {
   const cleanProfile = coerceProfile(profile);
   const missing = missingProfileMessage(cleanProfile);
   const prefixLines = Array.isArray(options && options.prefixLines) ? options.prefixLines.filter(Boolean) : [];
-  const analysis = options && options.analysis ? options.analysis : null;
+  const followUpBody = options && options.followUpBody ? String(options.followUpBody) : "";
+  const analysis = options && options.analysis ? options.analysis : detectApplicantContext(followUpBody, cleanProfile);
 
   if (missing) {
     return {
@@ -751,7 +818,9 @@ function buildReplyFromProfile(profile, options) {
     };
   }
 
-  const message = formatResults(cleanProfile, simulate(cleanProfile), analysis);
+  const results = simulate(cleanProfile);
+  const followUpMessage = followUpBody ? buildFollowUpReply(cleanProfile, results, analysis || {}, followUpBody) : "";
+  const message = followUpMessage || formatResults(cleanProfile, results, analysis);
   return {
     message: prefixLines.length ? prefixLines.concat("", message).join("\n") : message,
   };
