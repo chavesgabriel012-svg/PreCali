@@ -478,10 +478,10 @@ function buildProfileAdvice(profile, analysis, results) {
 }
 
 function defaultNextQuestion(analysis) {
-  if (analysis.coBorrower) return "¿Te hace sentido este plan o prefieres que exploremos bancos que acepten ingresos de co-propietarios como tu pareja?";
-  if (analysis.independent) return "¿Te hace sentido este plan o prefieres que enfoquemos bancos que acepten estados de cuenta?";
-  if (analysis.debtConsolidator) return "¿Te hace sentido este plan o prefieres que recalculemos limpiando tus deudas primero?";
-  return "¿Te hace sentido este plan o prefieres que exploremos bancos que acepten ingresos de co-propietarios como tu pareja?";
+  if (analysis.debtConsolidator) return "¿Querés que te deje la mejor ruta para aplicar después de ordenar tus deudas?";
+  if (analysis.independent) return "¿Querés que te deje la mejor opcion para aplicar con estados de cuenta?";
+  if (analysis.coBorrower) return "¿Querés que te prepare una ruta para aplicar con este escenario?";
+  return "¿Querés que te deje la mejor opcion para aplicar?";
 }
 
 function recommendedDownPaymentRange(product) {
