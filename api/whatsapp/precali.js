@@ -536,7 +536,7 @@ module.exports = async function handler(req, res) {
       rememberRecentProfile(input.from, merged.profile, buildContextBody(input));
       usedRememberedProfile = true;
       let advisorReply = null;
-      if (bodyNeedsAdvisorReply(input.body)) {
+      if (bodyNeedsAdvisorReply(input.body) && !bodyIsDirectApplicationCommand(input.body)) {
         try {
           advisorReply = await writeAdvisorReplyWithPreCaliAi({
             ...input,

@@ -404,13 +404,15 @@ function buildGroqAdvisorPrompt(input) {
     ? input.recentMessages.slice(-5).map((item, index) => `${index + 1}. ${String(item)}`).join("\n")
     : "(sin contexto previo)";
   const profile = input.profile || {};
-  const options = Array.isArray(input.results) ? input.results.slice(0, 4) : [];
+  const netIncome = Math.max(1, Number(profile.income || 0) - Number(profile.debt || 0));
+  const options = Array.isArray(input.results) ? input.results.slice(0, 8) : [];
   const optionLines = options.length
     ? options.map((item, index) => [
         `${index + 1}. ${item.bank}`,
         `tasa ${item.rate}%`,
         `monto ${item.amount}`,
         `cuota ${item.payment}`,
+        `carga ${Math.round((Number(item.payment || 0) / netIncome) * 100)}%`,
         `plazo ${item.years} anos`,
       ].join(" | ")).join("\n")
     : "(sin opciones calculadas)";
@@ -419,6 +421,8 @@ function buildGroqAdvisorPrompt(input) {
     "Sos PreCali IA, asesor financiero por WhatsApp.",
     "Responde como humano: claro, directo, empatico y util.",
     "Usa SOLO los datos del perfil y opciones calculadas abajo. No inventes bancos, tasas, aprobaciones ni requisitos.",
+    "Si el usuario menciona un banco que aparece en las opciones calculadas, evalua ese banco; no digas que no existe.",
+    "No elijas solo por tasa. Considera cuota mensual, carga sobre ingreso y lo que el usuario pregunto.",
     "Si el usuario pregunta si deberia aplicar, da criterio y aclara que sigue siendo precalificacion.",
     "No mandes una tabla completa si el usuario hizo una duda puntual.",
     "Maximo 5 lineas cortas. Termina con una pregunta concreta de siguiente paso.",
