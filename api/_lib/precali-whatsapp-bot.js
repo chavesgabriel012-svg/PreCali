@@ -103,6 +103,8 @@ function normalizeTypos(text) {
     .replace(/\bkasa\b/g, "casa")
     .replace(/\bveiculo\b/g, "vehiculo")
     .replace(/\bveiculos\b/g, "vehiculos")
+    .replace(/\bdevo\b/g, "debo")
+    .replace(/\bdevemos\b/g, "debemos")
     .replace(/\bpreztamo\b/g, "prestamo")
     .replace(/\bhipotekario\b/g, "hipotecario");
 }
@@ -229,7 +231,7 @@ function parseProfile(body) {
     amountAfter(
       text,
       ["valor", "monto", "vale", "cuesta", "hipoteca", "hipotecario", "casa", "vivienda", "propiedad", "apartamento", "apto", "lote", "terreno", "carro", "auto", "vehiculo", "veiculo", "prestamo", "credito", "financiar", "financiamiento", "ocupo", "necesito", "nesesito"],
-      ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte"]
+      ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "tengo", "contamos", "tenemos"]
     );
   const assetValue = rawAssetValue >= 100000 ? rawAssetValue : 0;
   const downPaymentPercentMatch = text.match(/(\d{1,2})\s*%\s*(?:de\s+)?(?:prima|enganche|aporte)/);
@@ -905,7 +907,7 @@ function formatResultsCompact(profile, results, analysis) {
   if (netIncome <= 0) {
     lines.push("No puedo simular con ingreso neto en cero.");
     lines.push("Primero hay que bajar deudas o subir ingreso.");
-    lines.push(closingQuestion("Â¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
+    lines.push(closingQuestion("Quieres que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
     return lines.join("\n");
   }
 
@@ -948,7 +950,7 @@ function formatResultsCompact(profile, results, analysis) {
     const applyCommand = applyCommandForBank(result.bank);
     applyOptions.push(applyCommand);
     lines.push(
-      "â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€",
+      "----------------",
       `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
       `• ${bold("Tasa")}: ${bold(result.rate.toFixed(2) + "%")} | ${bold("Plazo")}: ${bold(result.years + " anos")}`,
       `• ${bold("Monto")}: ${bold(money(result.amount, profile.country))}`,

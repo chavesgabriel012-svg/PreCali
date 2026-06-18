@@ -6,6 +6,16 @@ const { fetchTwilioMedia } = require("../_lib/twilio-media");
 const CONTEXT_TTL_MS = 20 * 60 * 1000;
 const MAX_CONTEXT_MESSAGES = 5;
 const recentTextContext = new Map();
+const COUNTRY_INPUT_SCALE = {
+  CR: 1,
+  MX: 29,
+  GT: 68,
+  PA: 540,
+  HN: 22,
+  NI: 15,
+  SV: 540,
+  US: 540,
+};
 
 function escapeXml(value) {
   return String(value || "")
@@ -155,6 +165,12 @@ function bodyHasYearHint(body) {
 
 function defaultYearsForProduct(product) {
   return product === "hipoteca" ? 30 : product === "vehiculo" ? 6 : 5;
+}
+
+function toInternalAmount(value, country) {
+  const number = Number(value) || 0;
+  const scale = COUNTRY_INPUT_SCALE[country] || 1;
+  return Math.max(0, Math.round(number * scale));
 }
 
 function bodyHasDebtZeroHint(body) {
@@ -311,6 +327,24 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   return { profile: merged, usedMessageHints: notes };
 }
 
+function mergeAiProfileWithBody(aiProfile, body) {
+  const ai = aiProfile || {};
+  const current = parseProfile(body || "");
+  const countryHint = explicitCountryFromBody(body);
+  const productHint = explicitProductFromBody(body);
+  const country = countryHint || ai.country || current.country || "CR";
+
+  return {
+    country,
+    product: productHint || ai.product || current.product || "personal",
+    income: current.income || toInternalAmount(ai.income, country),
+    debt: current.debt >= 10000 ? current.debt : toInternalAmount(ai.debt, country),
+    downPayment: current.downPayment >= 10000 ? current.downPayment : toInternalAmount(ai.downPayment, country),
+    assetValue: current.assetValue >= 100000 ? current.assetValue : toInternalAmount(ai.assetValue, country),
+    requestedYears: Number(ai.requestedYears) || (bodyHasYearHint(body) ? current.requestedYears : defaultYearsForProduct(productHint || ai.product || current.product)),
+  };
+}
+
 async function buildReplyFromLocalDocument(input) {
   if (Number(input.numMedia || 0) <= 0 || !input.mediaUrl) return null;
 
@@ -444,7 +478,8 @@ module.exports = async function handler(req, res) {
             prefixLines.push(detected.join(" | "));
           }
 
-          reply = buildReplyFromProfile(ai.profile, { prefixLines });
+          const aiProfile = mergeAiProfileWithBody(ai.profile, input.body);
+          reply = buildReplyFromProfile(aiProfile, { prefixLines });
         }
       } catch (aiError) {
         reply = null;
