@@ -195,6 +195,33 @@ function mergeDocumentAndMessageProfile(documentProfile, body) {
   return { profile: merged, usedMessageHints: notes };
 }
 
+function aiDocumentProfile(ai) {
+  const profile = (ai && ai.profile) || {};
+  const document = (ai && ai.document) || {};
+  return {
+    product: profile.product || "personal",
+    income: Number(profile.income) || Number(document.netIncome) || Number(document.grossIncome) || 0,
+    debt: Number(profile.debt) || 0,
+    downPayment: Number(profile.downPayment) || 0,
+    assetValue: Number(profile.assetValue) || 0,
+    requestedYears: Number(profile.requestedYears) || undefined,
+  };
+}
+
+function aiDocumentPrefix(ai) {
+  const document = (ai && ai.document) || {};
+  const lines = ["Ya analicé tu documento con IA."];
+  const detected = [];
+  if (document.name) detected.push("Nombre: " + document.name);
+  if (document.idNumber) detected.push("Cedula: " + document.idNumber);
+  if (document.employer) detected.push("Patrono: " + document.employer);
+  if (document.netIncome) detected.push("Ingreso neto detectado: " + money(document.netIncome));
+  if (!document.netIncome && document.grossIncome) detected.push("Ingreso bruto detectado: " + money(document.grossIncome));
+  if (detected.length) lines.push(detected.join(" | "));
+  if (ai && ai.notes) lines.push("Nota IA: " + String(ai.notes).slice(0, 240));
+  return lines;
+}
+
 function localDocumentFallbackMessage(documentResult) {
   const base = [
     "Recibi tu documento, pero el lector local de PreCali no pudo sacar suficientes datos para calcular.",
@@ -313,8 +340,23 @@ async function buildReplyFromLocalDocument(input) {
     return buildReplyFromProfile(merged.profile, { prefixLines });
   }
 
-  if (process.env.PRECALI_AI_DOCUMENT_FALLBACK === "1" && shouldUseAiForMessage(input)) {
-    return null;
+  if (process.env.PRECALI_AI_DOCUMENT_FALLBACK === "1" && documentResult.extractedText && documentResult.extractedText.length >= 25) {
+    const ai = await analyzeWithPreCaliAi({
+      ...input,
+      documentText: documentResult.extractedText,
+      recentMessages: readRecentMessages(input.from),
+    });
+
+    if (ai && ai.confidence >= 0.45) {
+      const contextBody = buildContextBody(input);
+      const merged = mergeDocumentAndMessageProfile(aiDocumentProfile(ai), contextBody);
+      const prefixLines = aiDocumentPrefix(ai);
+      if (merged.usedMessageHints.length) {
+        prefixLines.push("Tomé en cuenta tu mensaje para: " + merged.usedMessageHints.join(", "));
+      }
+      rememberRecentProfile(input.from, merged.profile, contextBody);
+      return buildReplyFromProfile(merged.profile, { prefixLines });
+    }
   }
 
   return { message: localDocumentFallbackMessage(documentResult) };

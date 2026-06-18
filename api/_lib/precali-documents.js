@@ -35,6 +35,7 @@ function readPreCaliDocument(buffer, contentType) {
     ok: parsed.ok,
     type,
     textLength: text.trim().length,
+    extractedText: text.trim().slice(0, 12000),
     document: parsed.document,
     profile: parsed.profile,
     confidence: parsed.confidence,

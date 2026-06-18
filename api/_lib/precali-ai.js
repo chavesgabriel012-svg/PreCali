@@ -14,14 +14,15 @@ function hasGroqKey() {
 function activeAiProvider(input) {
   const forced = String(process.env.PRECALI_AI_PROVIDER || "").trim().toLowerCase();
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
+  const hasDocumentText = Boolean(input && input.documentText);
 
   if (forced === "openai") return hasOpenAiKey() ? "openai" : "";
   if (forced === "groq") {
-    if (numMedia > 0) return hasOpenAiKey() ? "openai" : "";
+    if (numMedia > 0 && !hasDocumentText) return hasOpenAiKey() ? "openai" : "";
     return hasGroqKey() ? "groq" : "";
   }
 
-  if (numMedia > 0) return hasOpenAiKey() ? "openai" : "";
+  if (numMedia > 0 && !hasDocumentText) return hasOpenAiKey() ? "openai" : "";
   if (hasGroqKey()) return "groq";
   if (hasOpenAiKey()) return "openai";
   return "";
@@ -35,7 +36,11 @@ function shouldUseAiForMessage(input) {
   if (!aiEnabled(input)) return false;
 
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
-  if (numMedia > 0) return activeAiProvider(input) === "openai" && process.env.PRECALI_AI_DOCUMENT_FALLBACK === "1";
+  if (numMedia > 0) {
+    if (process.env.PRECALI_AI_DOCUMENT_FALLBACK !== "1") return false;
+    if (input && input.documentText && activeAiProvider(input) === "groq") return true;
+    return activeAiProvider(input) === "openai";
+  }
 
   if (process.env.PRECALI_AI_TEXT !== "1") return false;
 
@@ -194,6 +199,33 @@ function buildGroqExtractionPrompt(body, recentMessages) {
   ].join("\n");
 }
 
+function buildGroqDocumentPrompt(body, recentMessages, documentText) {
+  const historyLines = Array.isArray(recentMessages) && recentMessages.length
+    ? recentMessages.slice(-5).map((item, index) => `${index + 1}. ${String(item)}`).join("\n")
+    : "(sin contexto previo)";
+
+  return [
+    "Sos el extractor documental de PreCali.",
+    "Analiza texto crudo de una orden patronal, colilla, constancia, estado de cuenta o PDF financiero.",
+    "Devuelve SOLO JSON valido. No inventes montos.",
+    "Si el salario es quincenal, conviertelo a mensual multiplicando por 2.",
+    "Usa ingreso neto/liquido si aparece. Si solo hay bruto, colocalo como grossIncome y usa income solo si no hay neto.",
+    "No trates deducciones de ley como deuda. Solo usa deuda si dice prestamo, tarjeta, embargo, pension, cuota u obligacion recurrente.",
+    "Producto: hipoteca para casa/vivienda/lote/terreno/propiedad; vehiculo para carro/auto/moto; personal si no hay garantia.",
+    "",
+    "Contexto reciente del chat:",
+    historyLines,
+    "",
+    "Mensaje del usuario:",
+    body || "(sin texto)",
+    "",
+    "Texto extraido del documento:",
+    String(documentText || "").slice(0, 12000),
+    "",
+    'Devuelve un objeto JSON con esta forma exacta: {"profile":{"product":string|null,"income":number|null,"debt":number|null,"downPayment":number|null,"assetValue":number|null,"requestedYears":number|null},"document":{"type":string|null,"name":string|null,"idNumber":string|null,"employer":string|null,"grossIncome":number|null,"netIncome":number|null},"confidence":number,"missing":[string],"notes":string}',
+  ].join("\n");
+}
+
 async function fetchTwilioMedia(url) {
   if (!url) return null;
   const sid = process.env.TWILIO_ACCOUNT_SID;
@@ -321,7 +353,11 @@ async function callOpenAi({ body, mediaUrl, mediaType, numMedia }) {
   return normalizeAiResult(parsed);
 }
 
-async function callGroq({ body, recentMessages }) {
+async function callGroq({ body, recentMessages, documentText }) {
+  const prompt = documentText
+    ? buildGroqDocumentPrompt(body, recentMessages, documentText)
+    : buildGroqExtractionPrompt(body, recentMessages);
+
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
@@ -335,11 +371,11 @@ async function callGroq({ body, recentMessages }) {
       messages: [
         {
           role: "system",
-          content: "Sos PreCali IA. Extrae datos financieros de WhatsApp con precision y devuelve solo JSON valido.",
+          content: "Sos PreCali IA. Extrae datos financieros con precision y devuelve solo JSON valido.",
         },
         {
           role: "user",
-          content: buildGroqExtractionPrompt(body, recentMessages),
+          content: prompt,
         },
       ],
     }),
