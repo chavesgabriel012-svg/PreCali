@@ -384,7 +384,10 @@ module.exports = async function handler(req, res) {
 
     if (!reply && shouldUseAiForMessage(input)) {
       try {
-        const ai = await analyzeWithPreCaliAi(input);
+        const ai = await analyzeWithPreCaliAi({
+          ...input,
+          recentMessages: readRecentMessages(input.from),
+        });
         const prefixLines = [];
 
         if (ai && ai.confidence >= 0.45) {

@@ -1,19 +1,41 @@
-const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_MEDIA_BYTES = 7 * 1024 * 1024;
 
 function hasOpenAiKey() {
   return Boolean(process.env.OPENAI_API_KEY);
 }
 
-function aiEnabled() {
-  return hasOpenAiKey() && process.env.PRECALI_AI_DISABLED !== "1";
+function hasGroqKey() {
+  return Boolean(process.env.GROQ_API_KEY);
+}
+
+function activeAiProvider(input) {
+  const forced = String(process.env.PRECALI_AI_PROVIDER || "").trim().toLowerCase();
+  const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
+
+  if (forced === "openai") return hasOpenAiKey() ? "openai" : "";
+  if (forced === "groq") {
+    if (numMedia > 0) return hasOpenAiKey() ? "openai" : "";
+    return hasGroqKey() ? "groq" : "";
+  }
+
+  if (numMedia > 0) return hasOpenAiKey() ? "openai" : "";
+  if (hasGroqKey()) return "groq";
+  if (hasOpenAiKey()) return "openai";
+  return "";
+}
+
+function aiEnabled(input) {
+  return Boolean(activeAiProvider(input)) && process.env.PRECALI_AI_DISABLED !== "1";
 }
 
 function shouldUseAiForMessage(input) {
-  if (!aiEnabled()) return false;
+  if (!aiEnabled(input)) return false;
 
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
-  if (numMedia > 0) return process.env.PRECALI_AI_DOCUMENT_FALLBACK === "1";
+  if (numMedia > 0) return activeAiProvider(input) === "openai" && process.env.PRECALI_AI_DOCUMENT_FALLBACK === "1";
 
   if (process.env.PRECALI_AI_TEXT !== "1") return false;
 
@@ -149,6 +171,29 @@ function buildExtractionPrompt(body, mediaType) {
   ].join("\n");
 }
 
+function buildGroqExtractionPrompt(body, recentMessages) {
+  const historyLines = Array.isArray(recentMessages) && recentMessages.length
+    ? recentMessages.slice(-5).map((item, index) => `${index + 1}. ${String(item)}`).join("\n")
+    : "(sin contexto previo)";
+
+  return [
+    "Sos el extractor conversacional de PreCali para pre-calificacion financiera en Latinoamerica.",
+    "Entende texto desordenado de WhatsApp y devolve SOLO JSON valido.",
+    "No inventes montos. Si no sabes algo, usa null o array vacio.",
+    "Usa producto: personal, vehiculo o hipoteca.",
+    "Si el usuario hace una pregunta de seguimiento, usa el contexto reciente para inferir a que se refiere.",
+    "Moneda base: devuelve numeros puros en la moneda detectada del mensaje. No uses simbolos ni separadores.",
+    "",
+    "Contexto reciente del chat:",
+    historyLines,
+    "",
+    "Mensaje actual:",
+    body || "(sin texto)",
+    "",
+    'Devuelve un objeto JSON con esta forma exacta: {"profile":{"product":string|null,"income":number|null,"debt":number|null,"downPayment":number|null,"assetValue":number|null,"requestedYears":number|null},"document":{"type":null,"name":null,"idNumber":null,"employer":null,"grossIncome":null,"netIncome":null},"confidence":number,"missing":[string],"notes":string}',
+  ].join("\n");
+}
+
 async function fetchTwilioMedia(url) {
   if (!url) return null;
   const sid = process.env.TWILIO_ACCOUNT_SID;
@@ -242,7 +287,7 @@ async function callOpenAi({ body, mediaUrl, mediaType, numMedia }) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
+      model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
       input: [
         {
           role: "user",
@@ -276,13 +321,58 @@ async function callOpenAi({ body, mediaUrl, mediaType, numMedia }) {
   return normalizeAiResult(parsed);
 }
 
+async function callGroq({ body, recentMessages }) {
+  const response = await fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "Sos PreCali IA. Extrae datos financieros de WhatsApp con precision y devuelve solo JSON valido.",
+        },
+        {
+          role: "user",
+          content: buildGroqExtractionPrompt(body, recentMessages),
+        },
+      ],
+    }),
+  });
+
+  const raw = await response.text();
+  if (!response.ok) {
+    const error = new Error(`groq_${response.status}`);
+    error.status = response.status;
+    error.body = raw.slice(0, 1000);
+    throw error;
+  }
+
+  const data = safeJsonParse(raw);
+  const outputText = data && data.choices && data.choices[0] && data.choices[0].message
+    ? data.choices[0].message.content
+    : "";
+  const parsed = safeJsonParse(outputText);
+  if (!parsed) throw new Error("groq_invalid_json");
+
+  return normalizeAiResult(parsed);
+}
+
 async function analyzeWithPreCaliAi(input) {
   if (!shouldUseAiForMessage(input)) return null;
+  const provider = activeAiProvider(input);
+  if (provider === "groq") return callGroq(input);
   return callOpenAi(input);
 }
 
 module.exports = {
   aiEnabled,
+  activeAiProvider,
   shouldUseAiForMessage,
   analyzeWithPreCaliAi,
   normalizeAiResult,
