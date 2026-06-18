@@ -1,188 +1,87 @@
-const BANKS = [
-  {
-    id: "bac",
-    name: "BAC Credomatic",
-    country: "CR",
-    vehiculo: { rate: 9.25, maxYears: 8, ratio: 0.32, minIncome: 750000, minAmount: 5000000, finance: 0.85, terms: { USD: { currency: "USD", rate: 8.25, maxYears: 7, ratio: 0.3, minIncome: 1400, minAmount: 10000, finance: 0.8 } } },
-    personal: { rate: 18.0, maxYears: 5, ratio: 0.32, minIncome: 500000, minAmount: 500000, terms: { USD: { currency: "USD", rate: 14.0, maxYears: 5, ratio: 0.3, minIncome: 900, minAmount: 1000 } } },
-    hipoteca: { rate: 9.5, maxYears: 30, ratio: 0.35, minIncome: 750000, minAmount: 10000000, finance: 0.85, terms: { USD: { currency: "USD", rate: 8.25, maxYears: 30, ratio: 0.35, minIncome: 1500, minAmount: 30000, finance: 0.8 } } },
-  },
-  {
-    id: "bn",
-    name: "Banco Nacional",
-    country: "CR",
-    vehiculo: { rate: 8.9, maxYears: 8, ratio: 0.4, minIncome: 400000, minAmount: 2000000, finance: 0.85, terms: { USD: { currency: "USD", rate: 8.5, maxYears: 8, ratio: 0.38, minIncome: 800, minAmount: 5000, finance: 0.8 } } },
-    personal: { rate: 16.57, maxYears: 8, ratio: 0.4, minIncome: 400000, minAmount: 500000, terms: { USD: { currency: "USD", rate: 13.5, maxYears: 6, ratio: 0.35, minIncome: 800, minAmount: 1000 } } },
-    hipoteca: { rate: 9.0, maxYears: 30, ratio: 0.35, minIncome: 600000, minAmount: 5000000, finance: 0.9, terms: { USD: { currency: "USD", rate: 8.0, maxYears: 30, ratio: 0.35, minIncome: 1200, minAmount: 20000, finance: 0.85 } } },
-  },
-  {
-    id: "davibank",
-    name: "DaviBank",
-    country: "CR",
-    vehiculo: { rate: 8.95, maxYears: 8, ratio: 0.32, minIncome: 650000, minAmount: 3000000, finance: 0.9, terms: { USD: { currency: "USD", rate: 8.6, maxYears: 7, ratio: 0.3, minIncome: 1200, minAmount: 7000, finance: 0.85 } } },
-    personal: { rate: 19.0, maxYears: 5, ratio: 0.32, minIncome: 500000, minAmount: 500000, terms: { USD: { currency: "USD", rate: 15.0, maxYears: 5, ratio: 0.3, minIncome: 900, minAmount: 1000 } } },
-  },
-  {
-    id: "promerica",
-    name: "Promerica",
-    country: "CR",
-    vehiculo: { rate: 8.25, maxYears: 8, ratio: 0.33, minIncome: 600000, minAmount: 2500000, finance: 0.85, terms: { USD: { currency: "USD", rate: 7.95, maxYears: 7, ratio: 0.32, minIncome: 1100, minAmount: 6000, finance: 0.8 } } },
-    hipoteca: { rate: 12.0, maxYears: 30, ratio: 0.35, minIncome: 750000, minAmount: 10000000, finance: 0.85, terms: { USD: { currency: "USD", rate: 8.9, maxYears: 30, ratio: 0.35, minIncome: 1500, minAmount: 30000, finance: 0.8 } } },
-  },
-  {
-    id: "lafise",
-    name: "Lafise",
-    country: "CR",
-    vehiculo: { rate: 10.5, maxYears: 7, ratio: 0.4, minIncome: 600000, minAmount: 2000000, finance: 0.85, terms: { USD: { currency: "USD", rate: 9.25, maxYears: 6, ratio: 0.35, minIncome: 1100, minAmount: 5000, finance: 0.8 } } },
-    personal: { rate: 24.0, maxYears: 5, ratio: 0.35, minIncome: 500000, minAmount: 500000, terms: { USD: { currency: "USD", rate: 17.0, maxYears: 5, ratio: 0.32, minIncome: 900, minAmount: 1000 } } },
-    hipoteca: { rate: 10.0, maxYears: 30, ratio: 0.35, minIncome: 700000, minAmount: 8000000, finance: 0.8, terms: { USD: { currency: "USD", rate: 8.7, maxYears: 25, ratio: 0.35, minIncome: 1300, minAmount: 25000, finance: 0.75 } } },
-  },
-  {
-    id: "bbva-mx",
-    name: "BBVA Mexico",
-    country: "MX",
-    vehiculo: { rates: { MXN: 13.9, USD: 9.5 }, maxYears: 6, ratio: 0.35, minIncome: 18000, minAmount: 120000, finance: 0.85 },
-    personal: { rates: { MXN: 28.0, USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 20000 },
-    hipoteca: { rates: { MXN: 10.9, USD: 8.5 }, maxYears: 30, ratio: 0.4, minIncome: 20000, minAmount: 300000, finance: 0.9 },
-  },
-  {
-    id: "banorte-mx",
-    name: "Banorte",
-    country: "MX",
-    vehiculo: { rates: { MXN: 14.5, USD: 9.9 }, maxYears: 6, ratio: 0.35, minIncome: 16000, minAmount: 100000, finance: 0.85 },
-    personal: { rates: { MXN: 30.0, USD: 19.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 15000 },
-    hipoteca: { rates: { MXN: 11.2, USD: 8.8 }, maxYears: 30, ratio: 0.4, minIncome: 18000, minAmount: 300000, finance: 0.9 },
-  },
-  {
-    id: "santander-mx",
-    name: "Santander Mexico",
-    country: "MX",
-    vehiculo: { rates: { MXN: 15.0, USD: 10.2 }, maxYears: 6, ratio: 0.35, minIncome: 18000, minAmount: 120000, finance: 0.85 },
-    personal: { rates: { MXN: 32.0, USD: 20.0 }, maxYears: 5, ratio: 0.32, minIncome: 14000, minAmount: 20000 },
-    hipoteca: { rates: { MXN: 11.5, USD: 9.0 }, maxYears: 30, ratio: 0.4, minIncome: 20000, minAmount: 350000, finance: 0.9 },
-  },
-  {
-    id: "bi-gt",
-    name: "Banco Industrial",
-    country: "GT",
-    vehiculo: { rates: { GTQ: 10.5, USD: 8.5 }, maxYears: 7, ratio: 0.35, minIncome: 6000, minAmount: 50000, finance: 0.85 },
-    personal: { rates: { GTQ: 20.0, USD: 15.0 }, maxYears: 5, ratio: 0.32, minIncome: 4000, minAmount: 5000 },
-    hipoteca: { rates: { GTQ: 8.5, USD: 7.5 }, maxYears: 25, ratio: 0.4, minIncome: 7000, minAmount: 150000, finance: 0.85 },
-  },
-  {
-    id: "bac-gt",
-    name: "BAC Guatemala",
-    country: "GT",
-    vehiculo: { rates: { GTQ: 11.0, USD: 8.9 }, maxYears: 7, ratio: 0.35, minIncome: 6000, minAmount: 50000, finance: 0.85 },
-    personal: { rates: { GTQ: 22.0, USD: 16.0 }, maxYears: 5, ratio: 0.32, minIncome: 4500, minAmount: 5000 },
-    hipoteca: { rates: { GTQ: 8.9, USD: 7.9 }, maxYears: 25, ratio: 0.4, minIncome: 7000, minAmount: 150000, finance: 0.85 },
-  },
-  {
-    id: "banrural-gt",
-    name: "Banrural",
-    country: "GT",
-    vehiculo: { rates: { GTQ: 11.5, USD: 9.2 }, maxYears: 7, ratio: 0.35, minIncome: 5000, minAmount: 40000, finance: 0.8 },
-    personal: { rates: { GTQ: 24.0, USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 3500, minAmount: 5000 },
-    hipoteca: { rates: { GTQ: 9.2, USD: 8.2 }, maxYears: 25, ratio: 0.4, minIncome: 6000, minAmount: 120000, finance: 0.85 },
-  },
-  {
-    id: "bg-pa",
-    name: "Banco General",
-    country: "PA",
-    vehiculo: { rates: { USD: 7.5 }, maxYears: 7, ratio: 0.35, minIncome: 900, minAmount: 8000, finance: 0.85 },
-    personal: { rates: { USD: 14.0 }, maxYears: 5, ratio: 0.32, minIncome: 700, minAmount: 1000 },
-    hipoteca: { rates: { USD: 6.5 }, maxYears: 30, ratio: 0.4, minIncome: 1000, minAmount: 30000, finance: 0.9 },
-  },
-  {
-    id: "bac-pa",
-    name: "BAC Panama",
-    country: "PA",
-    vehiculo: { rates: { USD: 7.9 }, maxYears: 7, ratio: 0.35, minIncome: 900, minAmount: 8000, finance: 0.85 },
-    personal: { rates: { USD: 15.0 }, maxYears: 5, ratio: 0.32, minIncome: 700, minAmount: 1000 },
-    hipoteca: { rates: { USD: 6.9 }, maxYears: 30, ratio: 0.4, minIncome: 1000, minAmount: 30000, finance: 0.9 },
-  },
-  {
-    id: "banistmo-pa",
-    name: "Banistmo",
-    country: "PA",
-    vehiculo: { rates: { USD: 8.2 }, maxYears: 7, ratio: 0.35, minIncome: 900, minAmount: 8000, finance: 0.85 },
-    personal: { rates: { USD: 16.0 }, maxYears: 5, ratio: 0.32, minIncome: 700, minAmount: 1000 },
-    hipoteca: { rates: { USD: 7.2 }, maxYears: 30, ratio: 0.4, minIncome: 1000, minAmount: 30000, finance: 0.9 },
-  },
-  {
-    id: "bac-hn",
-    name: "BAC Honduras",
-    country: "HN",
-    vehiculo: { rates: { HNL: 13.0, USD: 9.0 }, maxYears: 7, ratio: 0.35, minIncome: 18000, minAmount: 180000, finance: 0.85 },
-    personal: { rates: { HNL: 25.0, USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 20000 },
-    hipoteca: { rates: { HNL: 11.0, USD: 8.5 }, maxYears: 25, ratio: 0.4, minIncome: 20000, minAmount: 500000, finance: 0.85 },
-  },
-  {
-    id: "ficohsa-hn",
-    name: "Ficohsa",
-    country: "HN",
-    vehiculo: { rates: { HNL: 13.5, USD: 9.3 }, maxYears: 7, ratio: 0.35, minIncome: 18000, minAmount: 180000, finance: 0.85 },
-    personal: { rates: { HNL: 26.0, USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 20000 },
-    hipoteca: { rates: { HNL: 11.5, USD: 8.8 }, maxYears: 25, ratio: 0.4, minIncome: 20000, minAmount: 500000, finance: 0.85 },
-  },
-  {
-    id: "lafise-hn",
-    name: "Lafise Honduras",
-    country: "HN",
-    vehiculo: { rates: { HNL: 14.0, USD: 9.8 }, maxYears: 7, ratio: 0.35, minIncome: 16000, minAmount: 150000, finance: 0.8 },
-    personal: { rates: { HNL: 28.0, USD: 19.0 }, maxYears: 5, ratio: 0.32, minIncome: 10000, minAmount: 15000 },
-    hipoteca: { rates: { HNL: 12.0, USD: 9.2 }, maxYears: 25, ratio: 0.4, minIncome: 18000, minAmount: 450000, finance: 0.85 },
-  },
-  {
-    id: "bac-ni",
-    name: "BAC Nicaragua",
-    country: "NI",
-    vehiculo: { rates: { NIO: 13.0, USD: 9.0 }, maxYears: 7, ratio: 0.35, minIncome: 25000, minAmount: 250000, finance: 0.85 },
-    personal: { rates: { NIO: 24.0, USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 18000, minAmount: 30000 },
-    hipoteca: { rates: { NIO: 11.0, USD: 8.5 }, maxYears: 25, ratio: 0.4, minIncome: 28000, minAmount: 800000, finance: 0.85 },
-  },
-  {
-    id: "lafise-ni",
-    name: "Lafise Nicaragua",
-    country: "NI",
-    vehiculo: { rates: { NIO: 13.5, USD: 9.3 }, maxYears: 7, ratio: 0.35, minIncome: 25000, minAmount: 250000, finance: 0.85 },
-    personal: { rates: { NIO: 25.0, USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 18000, minAmount: 30000 },
-    hipoteca: { rates: { NIO: 11.5, USD: 8.8 }, maxYears: 25, ratio: 0.4, minIncome: 28000, minAmount: 800000, finance: 0.85 },
-  },
-  {
-    id: "banpro-ni",
-    name: "Banpro",
-    country: "NI",
-    vehiculo: { rates: { NIO: 14.0, USD: 9.6 }, maxYears: 7, ratio: 0.35, minIncome: 23000, minAmount: 220000, finance: 0.8 },
-    personal: { rates: { NIO: 26.0, USD: 19.0 }, maxYears: 5, ratio: 0.32, minIncome: 16000, minAmount: 25000 },
-    hipoteca: { rates: { NIO: 12.0, USD: 9.2 }, maxYears: 25, ratio: 0.4, minIncome: 26000, minAmount: 700000, finance: 0.85 },
-  },
-  {
-    id: "agricola-sv",
-    name: "Banco Agricola",
-    country: "SV",
-    vehiculo: { rates: { USD: 8.5 }, maxYears: 7, ratio: 0.35, minIncome: 700, minAmount: 7000, finance: 0.85 },
-    personal: { rates: { USD: 16.0 }, maxYears: 5, ratio: 0.32, minIncome: 500, minAmount: 1000 },
-    hipoteca: { rates: { USD: 7.5 }, maxYears: 30, ratio: 0.4, minIncome: 800, minAmount: 25000, finance: 0.9 },
-  },
-  {
-    id: "bac-sv",
-    name: "BAC El Salvador",
-    country: "SV",
-    vehiculo: { rates: { USD: 8.9 }, maxYears: 7, ratio: 0.35, minIncome: 700, minAmount: 7000, finance: 0.85 },
-    personal: { rates: { USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 500, minAmount: 1000 },
-    hipoteca: { rates: { USD: 7.9 }, maxYears: 30, ratio: 0.4, minIncome: 800, minAmount: 25000, finance: 0.9 },
-  },
-  {
-    id: "davivienda-sv",
-    name: "Davivienda El Salvador",
-    country: "SV",
-    vehiculo: { rates: { USD: 9.2 }, maxYears: 7, ratio: 0.35, minIncome: 700, minAmount: 7000, finance: 0.85 },
-    personal: { rates: { USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 500, minAmount: 1000 },
-    hipoteca: { rates: { USD: 8.2 }, maxYears: 30, ratio: 0.4, minIncome: 800, minAmount: 25000, finance: 0.9 },
-  },
-];
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
 
+function loadDataSource() {
+  const candidates = [
+    path.join(process.cwd(), "data.js"),
+    path.join(__dirname, "..", "..", "data.js"),
+  ];
+  const dataPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!dataPath) throw new Error("No encontre data.js para cargar condiciones bancarias.");
+
+  const code = fs.readFileSync(dataPath, "utf8") + "\n;({ PAISES, BANCOS });";
+  return vm.runInNewContext(code, {}, { filename: dataPath, timeout: 1000 });
+}
+
+function normalizeSourceCountry(country) {
+  return String(country || "cr").toUpperCase();
+}
+
+function sourceCurrencyForCountry(country) {
+  const nativeCurrencies = {
+    CR: "CRC",
+    MX: "MXN",
+    GT: "GTQ",
+    PA: "USD",
+    HN: "HNL",
+    NI: "NIO",
+    SV: "USD",
+    US: "USD",
+  };
+  return nativeCurrencies[normalizeSourceCountry(country)] || "CRC";
+}
+
+function sourceCondition(product, country) {
+  if (!product) return null;
+  const nativeCurrency = sourceCurrencyForCountry(country);
+  const nativeRate = Number(product.tasaCRC);
+  const usdRate = product.tasaUSD === undefined ? undefined : Number(product.tasaUSD);
+  const rates = {};
+  if (Number.isFinite(nativeRate)) rates[nativeCurrency] = nativeRate;
+  if (Number.isFinite(usdRate)) rates.USD = usdRate;
+
+  return {
+    rates,
+    maxYears: Number(product.plazoMax) || 0,
+    ratio: Number(product.ratioMax) || 0.35,
+    minIncome: Number(product.ingresoMin) || 0,
+    minAmount: Number(product.montoMin) || 0,
+    finance: product.financia === undefined ? undefined : Number(product.financia),
+    commission: product.comision === undefined ? undefined : Number(product.comision),
+    url: product.url || "",
+    guarantee: product.garantia || "",
+    requirements: product.requisitos || [],
+    currency: nativeCurrency,
+    sourceCurrency: nativeCurrency,
+    hasExplicitUsdRate: product.tasaUSD !== undefined,
+  };
+}
+
+function bankFromSource(bank) {
+  const country = normalizeSourceCountry(bank.pais);
+  return {
+    id: bank.id,
+    name: bank.nombre,
+    country,
+    source: "data.js",
+    dataQuality: bank.calidadDato || (country === "CR" ? "oficial/revisada" : "referencial"),
+    web: bank.web || "",
+    personal: sourceCondition(bank.personal, country),
+    vehiculo: sourceCondition(bank.vehiculo, country),
+    hipoteca: sourceCondition(bank.hipoteca, country),
+  };
+}
+
+function loadBankCatalog() {
+  const source = loadDataSource();
+  if (!source || !Array.isArray(source.BANCOS)) {
+    throw new Error("data.js no expuso BANCOS como arreglo.");
+  }
+  return source.BANCOS.map(bankFromSource).filter((bank) => bank && bank.id && bank.name);
+}
+
+const BANKS = loadBankCatalog();
 const COUNTRY_CONFIG = {
   CR: { name: "Costa Rica", defaultCurrency: "CRC", currencies: { CRC: { locale: "es-CR", scale: 1 }, USD: { locale: "en-US", scale: 540 } } },
   MX: { name: "Mexico", defaultCurrency: "MXN", currencies: { MXN: { locale: "es-MX", scale: 29 }, USD: { locale: "en-US", scale: 540 } } },
@@ -374,7 +273,7 @@ function parseProfile(body, options) {
     amountAfter(
       text,
       ["gano", "gana", "ganamos", "ganan", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "me quedan libres", "me quedan", "recibo"],
-      ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
+      ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "abono", "carro", "auto", "vehiculo", "veiculo", "casa", "vivienda", "monto", "valor"]
     ) ||
     findAmount(text, [
       /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de ingreso|de salario|netos|mensuales)/,
@@ -397,11 +296,11 @@ function parseProfile(body, options) {
   const downPayment =
     amountAfter(
       text,
-      ["prima", "enganche", "aporte", "ahorrados", "ahorrado", "tengo ahorrados", "tengo ahorrado"],
+      ["prima", "enganche", "aporte", "abono", "ahorrados", "ahorrado", "tengo ahorrados", "tengo ahorrado"],
       ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "gano", "ingreso", "salario", "sueldo", "monto", "valor"]
     ) ||
     findAmount(text, [
-      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:usd|dolares?|crc|colones?|mxn|pesos?|gtq|quetzales?|hnl|lempiras?|nio|cordobas?)?\s*(?:de\s+)?(?:prima|enganche|aporte)\b/,
+      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:usd|dolares?|crc|colones?|mxn|pesos?|gtq|quetzales?|hnl|lempiras?|nio|cordobas?)?\s*(?:de\s+)?(?:prima|enganche|aporte|abono)\b/,
       /ahorrad[oa]s?\D{0,12}([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/,
     ]) ||
     0;
@@ -413,7 +312,7 @@ function parseProfile(body, options) {
       ["gano", "ingreso", "ingresos", "salario", "sueldo", "neto", "devengo", "debo", "deuda", "deudas", "pago", "pagos", "cuotas", "prima", "enganche", "aporte", "tengo", "contamos", "tenemos"]
     );
   const assetValue = rawAssetValue >= minimumAssetInput(currency) ? rawAssetValue : 0;
-  const downPaymentPercentMatch = text.match(/(\d{1,2})\s*%\s*(?:de\s+)?(?:prima|enganche|aporte)/);
+  const downPaymentPercentMatch = text.match(/(\d{1,2})\s*%\s*(?:de\s+)?(?:prima|enganche|aporte|abono)/);
   const downPaymentFromPercent = downPaymentPercentMatch && assetValue > 0
     ? Math.round(assetValue * (Number(downPaymentPercentMatch[1]) / 100))
     : 0;
@@ -592,24 +491,34 @@ function hasDebtSignal(text) {
 }
 
 function hasDownPaymentSignal(text) {
-  return /(prima|enganche|aporte)/.test(text);
+  return /(prima|enganche|aporte|abono)/.test(text);
 }
 
 function detectRequestedBank(text) {
-  if (/\bbac\b|bac credomatic/.test(text)) return "BAC";
-  if (/\bbn\b|banco nacional/.test(text)) return "Banco Nacional";
-  if (/promerica/.test(text)) return "Promerica";
-  if (/lafise/.test(text)) return "Lafise";
-  if (/davi/.test(text)) return "DaviBank";
-  return "";
+  const normalizedText = normalize(text);
+  const compactText = normalizedText.replace(/[^a-z0-9]/g, "");
+  const aliases = {
+    bac: "BAC Credomatic",
+    bn: "Banco Nacional",
+  };
+
+  for (const [alias, name] of Object.entries(aliases)) {
+    if (new RegExp("\\b" + alias + "\\b").test(normalizedText)) return name;
+  }
+
+  const selected = BANKS.find((bank) => {
+    const bankName = normalize(bank.name || "");
+    const compactName = bankName.replace(/[^a-z0-9]/g, "");
+    const compactId = normalize(bank.id || "").replace(/[^a-z0-9]/g, "");
+    return (bankName && normalizedText.includes(bankName)) ||
+      (compactName && compactText.includes(compactName)) ||
+      (compactId && compactText.includes(compactId));
+  });
+
+  return selected ? selected.name : "";
 }
 
 function applyCommandForBank(bankName) {
-  if (bankName === "BAC Credomatic") return "Aplicar BAC";
-  if (bankName === "Banco Nacional") return "Aplicar BN";
-  if (bankName === "Promerica") return "Aplicar Promerica";
-  if (bankName === "Lafise") return "Aplicar Lafise";
-  if (bankName === "DaviBank") return "Aplicar Davi";
   return `Aplicar ${bankName}`;
 }
 
@@ -1219,7 +1128,7 @@ function buildReply(input) {
     };
   }
 
-  const hasFinancialIntent = /(gano|ingreso|salario|sueldo|neto|debo|deuda|prima|enganche|casa|vivienda|hipoteca|carro|auto|vehiculo|credito|prestamo|plata|financiar)/.test(text);
+  const hasFinancialIntent = /(gano|ingreso|salario|sueldo|neto|debo|deuda|prima|enganche|aporte|abono|casa|vivienda|hipoteca|carro|auto|vehiculo|credito|prestamo|plata|financiar)/.test(text);
 
   if (!text || (/^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)\b/.test(text) && !hasFinancialIntent)) {
     return {
