@@ -6,15 +6,15 @@ const { fetchTwilioMedia } = require("../_lib/twilio-media");
 const CONTEXT_TTL_MS = 20 * 60 * 1000;
 const MAX_CONTEXT_MESSAGES = 5;
 const recentTextContext = new Map();
-const COUNTRY_INPUT_SCALE = {
-  CR: 1,
-  MX: 29,
-  GT: 68,
-  PA: 540,
-  HN: 22,
-  NI: 15,
-  SV: 540,
-  US: 540,
+const COUNTRY_CONFIG = {
+  CR: { defaultCurrency: "CRC", currencies: { CRC: { scale: 1 }, USD: { scale: 540 } } },
+  MX: { defaultCurrency: "MXN", currencies: { MXN: { scale: 29 }, USD: { scale: 540 } } },
+  GT: { defaultCurrency: "GTQ", currencies: { GTQ: { scale: 68 }, USD: { scale: 540 } } },
+  PA: { defaultCurrency: "USD", currencies: { USD: { scale: 540 } } },
+  HN: { defaultCurrency: "HNL", currencies: { HNL: { scale: 22 }, USD: { scale: 540 } } },
+  NI: { defaultCurrency: "NIO", currencies: { NIO: { scale: 15 }, USD: { scale: 540 } } },
+  SV: { defaultCurrency: "USD", currencies: { USD: { scale: 540 } } },
+  US: { defaultCurrency: "USD", currencies: { USD: { scale: 540 } } },
 };
 
 function escapeXml(value) {
@@ -121,8 +121,22 @@ function readRecentMessages(from) {
   return entry && Array.isArray(entry.messages) ? entry.messages.slice(-MAX_CONTEXT_MESSAGES) : [];
 }
 
-function money(value) {
-  return "CRC " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("es-CR");
+function defaultCurrencyForCountry(country) {
+  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  return config.defaultCurrency;
+}
+
+function currencyScale(country, currency) {
+  const countryConfig = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  const selectedCurrency = currency || countryConfig.defaultCurrency;
+  const currencyConfig = countryConfig.currencies[selectedCurrency] || countryConfig.currencies[countryConfig.defaultCurrency];
+  return currencyConfig ? currencyConfig.scale : 1;
+}
+
+function money(value, profile) {
+  const country = profile && profile.country ? profile.country : "CR";
+  const currency = profile && profile.currency ? profile.currency : defaultCurrencyForCountry(country);
+  return currency + " " + Math.max(0, Math.round((Number(value) || 0) / currencyScale(country, currency))).toLocaleString("es-CR");
 }
 
 function productLabel(product) {
@@ -146,7 +160,17 @@ function explicitCountryFromBody(body) {
   if (/\bhonduras\b|\bhn\b/.test(text)) return "HN";
   if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
   if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
-  if (/\busd\b|dolares?\b|\$/.test(text)) return "US";
+  return "";
+}
+
+function explicitCurrencyFromBody(body, country) {
+  const text = normalizeForIntent(body);
+  if (/\busd\b|dolares?\b|\$/.test(text)) return "USD";
+  if (/\bcrc\b|colones?\b/.test(text)) return "CRC";
+  if (/\bmxn\b|pesos?\b/.test(text) && country === "MX") return "MXN";
+  if (/\bgtq\b|quetzales?\b/.test(text)) return "GTQ";
+  if (/\bhnl\b|lempiras?\b/.test(text)) return "HNL";
+  if (/\bnio\b|cordobas?\b/.test(text)) return "NIO";
   return "";
 }
 
@@ -180,10 +204,9 @@ function defaultYearsForProduct(product) {
   return product === "hipoteca" ? 30 : product === "vehiculo" ? 6 : 5;
 }
 
-function toInternalAmount(value, country) {
+function toInternalAmount(value, country, currency) {
   const number = Number(value) || 0;
-  const scale = COUNTRY_INPUT_SCALE[country] || 1;
-  return Math.max(0, Math.round(number * scale));
+  return Math.max(0, Math.round(number * currencyScale(country, currency)));
 }
 
 function bodyHasDebtZeroHint(body) {
@@ -202,11 +225,15 @@ function mergeDocumentAndMessageProfile(documentProfile, body, defaultCountry) {
   const doc = documentProfile || {};
   const productHint = explicitProductFromBody(body);
   const countryHint = explicitCountryFromBody(body);
-  const bodyProfile = parseProfile(body || "", { defaultCountry: countryHint || defaultCountry });
+  const country = countryHint || defaultCountry || doc.country || "CR";
+  const currencyHint = explicitCurrencyFromBody(body, country);
+  const currency = currencyHint || doc.currency || defaultCurrencyForCountry(country);
+  const bodyProfile = parseProfile(body || "", { defaultCountry: country, defaultCurrency: currency });
   const notes = [];
 
   const merged = {
-    country: countryHint || defaultCountry || doc.country || bodyProfile.country || "CR",
+    country,
+    currency: currencyHint || bodyProfile.currency || currency,
     product: productHint || doc.product || bodyProfile.product || "personal",
     income: Number(doc.income) || Number(bodyProfile.income) || 0,
     debt: Math.max(Number(doc.debt) || 0, bodyProfile.debt >= 10000 ? Number(bodyProfile.debt) || 0 : 0),
@@ -228,6 +255,8 @@ function aiDocumentProfile(ai) {
   const profile = (ai && ai.profile) || {};
   const document = (ai && ai.document) || {};
   return {
+    country: profile.country || "",
+    currency: profile.currency || "",
     product: profile.product || "personal",
     income: Number(profile.income) || Number(document.netIncome) || Number(document.grossIncome) || 0,
     debt: Number(profile.debt) || 0,
@@ -244,8 +273,8 @@ function aiDocumentPrefix(ai) {
   if (document.name) detected.push("Nombre: " + document.name);
   if (document.idNumber) detected.push("Cedula: " + document.idNumber);
   if (document.employer) detected.push("Patrono: " + document.employer);
-  if (document.netIncome) detected.push("Ingreso neto detectado: " + money(document.netIncome));
-  if (!document.netIncome && document.grossIncome) detected.push("Ingreso bruto detectado: " + money(document.grossIncome));
+  if (document.netIncome) detected.push("Ingreso neto detectado: " + money(document.netIncome, { country: "CR", currency: "CRC" }));
+  if (!document.netIncome && document.grossIncome) detected.push("Ingreso bruto detectado: " + money(document.grossIncome, { country: "CR", currency: "CRC" }));
   if (detected.length) lines.push(detected.join(" | "));
   if (ai && ai.notes) lines.push("Nota IA: " + String(ai.notes).slice(0, 240));
   return lines;
@@ -295,7 +324,7 @@ function shouldUseRememberedProfile(input, rememberedProfile) {
     return false;
   }
 
-  const current = parseProfile(body);
+  const current = parseProfile(body, { defaultCountry: rememberedProfile.country, defaultCurrency: rememberedProfile.currency });
   if (current.income) return hasFollowUpCue || hasValidationQuestion;
   if (current.downPayment >= 10000 || current.assetValue >= 100000 || current.debt >= 10000) return true;
   if (bodyHasDebtZeroHint(body)) return true;
@@ -309,7 +338,10 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   const remembered = coerceProfile(rememberedProfile);
   const explicitProduct = explicitProductFromBody(body);
   const explicitCountry = explicitCountryFromBody(body);
-  const current = parseProfile(body || "", { defaultCountry: explicitCountry || remembered.country });
+  const country = explicitCountry || remembered.country || "CR";
+  const explicitCurrency = explicitCurrencyFromBody(body, country);
+  const currency = explicitCurrency || remembered.currency || defaultCurrencyForCountry(country);
+  const current = parseProfile(body || "", { defaultCountry: country, defaultCurrency: currency });
   const product = explicitProduct || remembered.product || current.product || "personal";
   const productChanged = product !== remembered.product;
   const debtCleared = bodyHasDebtZeroHint(body) || bodyHasDebtClearedHint(body);
@@ -317,7 +349,8 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   const notes = [];
 
   const merged = {
-    country: explicitCountry || remembered.country || current.country || "CR",
+    country,
+    currency: explicitCurrency || current.currency || currency,
     product,
     income: addCoBorrower ? (remembered.income || 0) + current.income : current.income || remembered.income || 0,
     debt: debtCleared ? 0 : current.debt >= 10000 ? current.debt : remembered.debt || 0,
@@ -335,6 +368,7 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   if (current.assetValue >= 100000) notes.push("monto");
   if (current.downPayment >= 10000) notes.push("prima");
   if (current.debt >= 10000 || debtCleared) notes.push("deudas");
+  if (explicitCurrency) notes.push("moneda");
   if (bodyHasYearHint(body)) notes.push("plazo");
 
   return { profile: merged, usedMessageHints: notes };
@@ -344,16 +378,19 @@ function mergeAiProfileWithBody(aiProfile, body, defaultCountry) {
   const ai = aiProfile || {};
   const countryHint = explicitCountryFromBody(body);
   const productHint = explicitProductFromBody(body);
-  const current = parseProfile(body || "", { defaultCountry: countryHint || defaultCountry });
-  const country = countryHint || defaultCountry || ai.country || current.country || "CR";
+  const country = countryHint || defaultCountry || ai.country || "CR";
+  const currencyHint = explicitCurrencyFromBody(body, country);
+  const currency = currencyHint || ai.currency || defaultCurrencyForCountry(country);
+  const current = parseProfile(body || "", { defaultCountry: country, defaultCurrency: currency });
 
   return {
     country,
+    currency: currencyHint || current.currency || currency,
     product: productHint || ai.product || current.product || "personal",
-    income: current.income || toInternalAmount(ai.income, country),
-    debt: current.debt >= 10000 ? current.debt : toInternalAmount(ai.debt, country),
-    downPayment: current.downPayment >= 10000 ? current.downPayment : toInternalAmount(ai.downPayment, country),
-    assetValue: current.assetValue >= 100000 ? current.assetValue : toInternalAmount(ai.assetValue, country),
+    income: current.income || toInternalAmount(ai.income, country, currency),
+    debt: current.debt >= 10000 ? current.debt : toInternalAmount(ai.debt, country, currency),
+    downPayment: current.downPayment >= 10000 ? current.downPayment : toInternalAmount(ai.downPayment, country, currency),
+    assetValue: current.assetValue >= 100000 ? current.assetValue : toInternalAmount(ai.assetValue, country, currency),
     requestedYears: Number(ai.requestedYears) || (bodyHasYearHint(body) ? current.requestedYears : defaultYearsForProduct(productHint || ai.product || current.product)),
   };
 }
@@ -379,7 +416,7 @@ async function buildReplyFromLocalDocument(input) {
     }
     if (merged.usedMessageHints.includes("producto")) detected.push("Producto final: " + productLabel(merged.profile.product));
     if (documentResult.document && documentResult.document.strongObligations) {
-      detected.push("Obligaciones fuertes detectadas: " + money(documentResult.document.strongObligations));
+      detected.push("Obligaciones fuertes detectadas: " + money(documentResult.document.strongObligations, merged.profile));
     }
     if (detected.length) prefixLines.push(detected.join(" | "));
     for (const warning of documentResult.warnings || []) prefixLines.push("Nota: " + warning);
@@ -436,6 +473,7 @@ module.exports = async function handler(req, res) {
       mediaType: params.MediaContentType0,
       defaultCountry: explicitCountryFromPhone(params.From),
     };
+    input.defaultCurrency = defaultCurrencyForCountry(input.defaultCountry || "CR");
 
     if (hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
       rememberRecentText(input.from, input.body);
@@ -505,7 +543,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (!usedRememberedProfile && hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
-      const parsed = parseProfile(input.body, { defaultCountry: input.defaultCountry });
+      const parsed = parseProfile(input.body, { defaultCountry: input.defaultCountry, defaultCurrency: input.defaultCurrency });
       if (parsed.income) {
         rememberRecentProfile(input.from, parsed, input.body);
       }

@@ -2,6 +2,7 @@ const BANKS = [
   {
     id: "bac",
     name: "BAC Credomatic",
+    country: "CR",
     vehiculo: { rate: 9.25, maxYears: 8, ratio: 0.32, minIncome: 750000, minAmount: 5000000, finance: 0.85 },
     personal: { rate: 18.0, maxYears: 5, ratio: 0.32, minIncome: 500000, minAmount: 500000 },
     hipoteca: { rate: 9.5, maxYears: 30, ratio: 0.35, minIncome: 750000, minAmount: 10000000, finance: 0.85 },
@@ -9,6 +10,7 @@ const BANKS = [
   {
     id: "bn",
     name: "Banco Nacional",
+    country: "CR",
     vehiculo: { rate: 8.9, maxYears: 8, ratio: 0.4, minIncome: 400000, minAmount: 2000000, finance: 0.85 },
     personal: { rate: 16.57, maxYears: 8, ratio: 0.4, minIncome: 400000, minAmount: 500000 },
     hipoteca: { rate: 9.0, maxYears: 30, ratio: 0.35, minIncome: 600000, minAmount: 5000000, finance: 0.9 },
@@ -16,33 +18,180 @@ const BANKS = [
   {
     id: "davibank",
     name: "DaviBank",
+    country: "CR",
     vehiculo: { rate: 8.95, maxYears: 8, ratio: 0.32, minIncome: 650000, minAmount: 3000000, finance: 0.9 },
     personal: { rate: 19.0, maxYears: 5, ratio: 0.32, minIncome: 500000, minAmount: 500000 },
   },
   {
     id: "promerica",
     name: "Promerica",
+    country: "CR",
     vehiculo: { rate: 8.25, maxYears: 8, ratio: 0.33, minIncome: 600000, minAmount: 2500000, finance: 0.85 },
     hipoteca: { rate: 12.0, maxYears: 30, ratio: 0.35, minIncome: 750000, minAmount: 10000000, finance: 0.85 },
   },
   {
     id: "lafise",
     name: "Lafise",
+    country: "CR",
     vehiculo: { rate: 10.5, maxYears: 7, ratio: 0.4, minIncome: 600000, minAmount: 2000000, finance: 0.85 },
     personal: { rate: 24.0, maxYears: 5, ratio: 0.35, minIncome: 500000, minAmount: 500000 },
     hipoteca: { rate: 10.0, maxYears: 30, ratio: 0.35, minIncome: 700000, minAmount: 8000000, finance: 0.8 },
   },
+  {
+    id: "bbva-mx",
+    name: "BBVA Mexico",
+    country: "MX",
+    vehiculo: { rates: { MXN: 13.9, USD: 9.5 }, maxYears: 6, ratio: 0.35, minIncome: 18000, minAmount: 120000, finance: 0.85 },
+    personal: { rates: { MXN: 28.0, USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 20000 },
+    hipoteca: { rates: { MXN: 10.9, USD: 8.5 }, maxYears: 30, ratio: 0.4, minIncome: 20000, minAmount: 300000, finance: 0.9 },
+  },
+  {
+    id: "banorte-mx",
+    name: "Banorte",
+    country: "MX",
+    vehiculo: { rates: { MXN: 14.5, USD: 9.9 }, maxYears: 6, ratio: 0.35, minIncome: 16000, minAmount: 100000, finance: 0.85 },
+    personal: { rates: { MXN: 30.0, USD: 19.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 15000 },
+    hipoteca: { rates: { MXN: 11.2, USD: 8.8 }, maxYears: 30, ratio: 0.4, minIncome: 18000, minAmount: 300000, finance: 0.9 },
+  },
+  {
+    id: "santander-mx",
+    name: "Santander Mexico",
+    country: "MX",
+    vehiculo: { rates: { MXN: 15.0, USD: 10.2 }, maxYears: 6, ratio: 0.35, minIncome: 18000, minAmount: 120000, finance: 0.85 },
+    personal: { rates: { MXN: 32.0, USD: 20.0 }, maxYears: 5, ratio: 0.32, minIncome: 14000, minAmount: 20000 },
+    hipoteca: { rates: { MXN: 11.5, USD: 9.0 }, maxYears: 30, ratio: 0.4, minIncome: 20000, minAmount: 350000, finance: 0.9 },
+  },
+  {
+    id: "bi-gt",
+    name: "Banco Industrial",
+    country: "GT",
+    vehiculo: { rates: { GTQ: 10.5, USD: 8.5 }, maxYears: 7, ratio: 0.35, minIncome: 6000, minAmount: 50000, finance: 0.85 },
+    personal: { rates: { GTQ: 20.0, USD: 15.0 }, maxYears: 5, ratio: 0.32, minIncome: 4000, minAmount: 5000 },
+    hipoteca: { rates: { GTQ: 8.5, USD: 7.5 }, maxYears: 25, ratio: 0.4, minIncome: 7000, minAmount: 150000, finance: 0.85 },
+  },
+  {
+    id: "bac-gt",
+    name: "BAC Guatemala",
+    country: "GT",
+    vehiculo: { rates: { GTQ: 11.0, USD: 8.9 }, maxYears: 7, ratio: 0.35, minIncome: 6000, minAmount: 50000, finance: 0.85 },
+    personal: { rates: { GTQ: 22.0, USD: 16.0 }, maxYears: 5, ratio: 0.32, minIncome: 4500, minAmount: 5000 },
+    hipoteca: { rates: { GTQ: 8.9, USD: 7.9 }, maxYears: 25, ratio: 0.4, minIncome: 7000, minAmount: 150000, finance: 0.85 },
+  },
+  {
+    id: "banrural-gt",
+    name: "Banrural",
+    country: "GT",
+    vehiculo: { rates: { GTQ: 11.5, USD: 9.2 }, maxYears: 7, ratio: 0.35, minIncome: 5000, minAmount: 40000, finance: 0.8 },
+    personal: { rates: { GTQ: 24.0, USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 3500, minAmount: 5000 },
+    hipoteca: { rates: { GTQ: 9.2, USD: 8.2 }, maxYears: 25, ratio: 0.4, minIncome: 6000, minAmount: 120000, finance: 0.85 },
+  },
+  {
+    id: "bg-pa",
+    name: "Banco General",
+    country: "PA",
+    vehiculo: { rates: { USD: 7.5 }, maxYears: 7, ratio: 0.35, minIncome: 900, minAmount: 8000, finance: 0.85 },
+    personal: { rates: { USD: 14.0 }, maxYears: 5, ratio: 0.32, minIncome: 700, minAmount: 1000 },
+    hipoteca: { rates: { USD: 6.5 }, maxYears: 30, ratio: 0.4, minIncome: 1000, minAmount: 30000, finance: 0.9 },
+  },
+  {
+    id: "bac-pa",
+    name: "BAC Panama",
+    country: "PA",
+    vehiculo: { rates: { USD: 7.9 }, maxYears: 7, ratio: 0.35, minIncome: 900, minAmount: 8000, finance: 0.85 },
+    personal: { rates: { USD: 15.0 }, maxYears: 5, ratio: 0.32, minIncome: 700, minAmount: 1000 },
+    hipoteca: { rates: { USD: 6.9 }, maxYears: 30, ratio: 0.4, minIncome: 1000, minAmount: 30000, finance: 0.9 },
+  },
+  {
+    id: "banistmo-pa",
+    name: "Banistmo",
+    country: "PA",
+    vehiculo: { rates: { USD: 8.2 }, maxYears: 7, ratio: 0.35, minIncome: 900, minAmount: 8000, finance: 0.85 },
+    personal: { rates: { USD: 16.0 }, maxYears: 5, ratio: 0.32, minIncome: 700, minAmount: 1000 },
+    hipoteca: { rates: { USD: 7.2 }, maxYears: 30, ratio: 0.4, minIncome: 1000, minAmount: 30000, finance: 0.9 },
+  },
+  {
+    id: "bac-hn",
+    name: "BAC Honduras",
+    country: "HN",
+    vehiculo: { rates: { HNL: 13.0, USD: 9.0 }, maxYears: 7, ratio: 0.35, minIncome: 18000, minAmount: 180000, finance: 0.85 },
+    personal: { rates: { HNL: 25.0, USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 20000 },
+    hipoteca: { rates: { HNL: 11.0, USD: 8.5 }, maxYears: 25, ratio: 0.4, minIncome: 20000, minAmount: 500000, finance: 0.85 },
+  },
+  {
+    id: "ficohsa-hn",
+    name: "Ficohsa",
+    country: "HN",
+    vehiculo: { rates: { HNL: 13.5, USD: 9.3 }, maxYears: 7, ratio: 0.35, minIncome: 18000, minAmount: 180000, finance: 0.85 },
+    personal: { rates: { HNL: 26.0, USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 12000, minAmount: 20000 },
+    hipoteca: { rates: { HNL: 11.5, USD: 8.8 }, maxYears: 25, ratio: 0.4, minIncome: 20000, minAmount: 500000, finance: 0.85 },
+  },
+  {
+    id: "lafise-hn",
+    name: "Lafise Honduras",
+    country: "HN",
+    vehiculo: { rates: { HNL: 14.0, USD: 9.8 }, maxYears: 7, ratio: 0.35, minIncome: 16000, minAmount: 150000, finance: 0.8 },
+    personal: { rates: { HNL: 28.0, USD: 19.0 }, maxYears: 5, ratio: 0.32, minIncome: 10000, minAmount: 15000 },
+    hipoteca: { rates: { HNL: 12.0, USD: 9.2 }, maxYears: 25, ratio: 0.4, minIncome: 18000, minAmount: 450000, finance: 0.85 },
+  },
+  {
+    id: "bac-ni",
+    name: "BAC Nicaragua",
+    country: "NI",
+    vehiculo: { rates: { NIO: 13.0, USD: 9.0 }, maxYears: 7, ratio: 0.35, minIncome: 25000, minAmount: 250000, finance: 0.85 },
+    personal: { rates: { NIO: 24.0, USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 18000, minAmount: 30000 },
+    hipoteca: { rates: { NIO: 11.0, USD: 8.5 }, maxYears: 25, ratio: 0.4, minIncome: 28000, minAmount: 800000, finance: 0.85 },
+  },
+  {
+    id: "lafise-ni",
+    name: "Lafise Nicaragua",
+    country: "NI",
+    vehiculo: { rates: { NIO: 13.5, USD: 9.3 }, maxYears: 7, ratio: 0.35, minIncome: 25000, minAmount: 250000, finance: 0.85 },
+    personal: { rates: { NIO: 25.0, USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 18000, minAmount: 30000 },
+    hipoteca: { rates: { NIO: 11.5, USD: 8.8 }, maxYears: 25, ratio: 0.4, minIncome: 28000, minAmount: 800000, finance: 0.85 },
+  },
+  {
+    id: "banpro-ni",
+    name: "Banpro",
+    country: "NI",
+    vehiculo: { rates: { NIO: 14.0, USD: 9.6 }, maxYears: 7, ratio: 0.35, minIncome: 23000, minAmount: 220000, finance: 0.8 },
+    personal: { rates: { NIO: 26.0, USD: 19.0 }, maxYears: 5, ratio: 0.32, minIncome: 16000, minAmount: 25000 },
+    hipoteca: { rates: { NIO: 12.0, USD: 9.2 }, maxYears: 25, ratio: 0.4, minIncome: 26000, minAmount: 700000, finance: 0.85 },
+  },
+  {
+    id: "agricola-sv",
+    name: "Banco Agricola",
+    country: "SV",
+    vehiculo: { rates: { USD: 8.5 }, maxYears: 7, ratio: 0.35, minIncome: 700, minAmount: 7000, finance: 0.85 },
+    personal: { rates: { USD: 16.0 }, maxYears: 5, ratio: 0.32, minIncome: 500, minAmount: 1000 },
+    hipoteca: { rates: { USD: 7.5 }, maxYears: 30, ratio: 0.4, minIncome: 800, minAmount: 25000, finance: 0.9 },
+  },
+  {
+    id: "bac-sv",
+    name: "BAC El Salvador",
+    country: "SV",
+    vehiculo: { rates: { USD: 8.9 }, maxYears: 7, ratio: 0.35, minIncome: 700, minAmount: 7000, finance: 0.85 },
+    personal: { rates: { USD: 17.0 }, maxYears: 5, ratio: 0.32, minIncome: 500, minAmount: 1000 },
+    hipoteca: { rates: { USD: 7.9 }, maxYears: 30, ratio: 0.4, minIncome: 800, minAmount: 25000, finance: 0.9 },
+  },
+  {
+    id: "davivienda-sv",
+    name: "Davivienda El Salvador",
+    country: "SV",
+    vehiculo: { rates: { USD: 9.2 }, maxYears: 7, ratio: 0.35, minIncome: 700, minAmount: 7000, finance: 0.85 },
+    personal: { rates: { USD: 18.0 }, maxYears: 5, ratio: 0.32, minIncome: 500, minAmount: 1000 },
+    hipoteca: { rates: { USD: 8.2 }, maxYears: 30, ratio: 0.4, minIncome: 800, minAmount: 25000, finance: 0.9 },
+  },
 ];
 
 const COUNTRY_CONFIG = {
-  CR: { currency: "CRC", locale: "es-CR", scale: 1 },
-  MX: { currency: "MXN", locale: "es-MX", scale: 29 },
-  GT: { currency: "GTQ", locale: "es-GT", scale: 68 },
-  PA: { currency: "USD", locale: "en-US", scale: 540 },
-  HN: { currency: "HNL", locale: "es-HN", scale: 22 },
-  NI: { currency: "NIO", locale: "es-NI", scale: 15 },
-  SV: { currency: "USD", locale: "es-SV", scale: 540 },
-  US: { currency: "USD", locale: "en-US", scale: 540 },
+  CR: { name: "Costa Rica", defaultCurrency: "CRC", currencies: { CRC: { locale: "es-CR", scale: 1 }, USD: { locale: "en-US", scale: 540 } } },
+  MX: { name: "Mexico", defaultCurrency: "MXN", currencies: { MXN: { locale: "es-MX", scale: 29 }, USD: { locale: "en-US", scale: 540 } } },
+  GT: { name: "Guatemala", defaultCurrency: "GTQ", currencies: { GTQ: { locale: "es-GT", scale: 68 }, USD: { locale: "en-US", scale: 540 } } },
+  PA: { name: "Panama", defaultCurrency: "USD", currencies: { USD: { locale: "en-US", scale: 540 } } },
+  HN: { name: "Honduras", defaultCurrency: "HNL", currencies: { HNL: { locale: "es-HN", scale: 22 }, USD: { locale: "en-US", scale: 540 } } },
+  NI: { name: "Nicaragua", defaultCurrency: "NIO", currencies: { NIO: { locale: "es-NI", scale: 15 }, USD: { locale: "en-US", scale: 540 } } },
+  SV: { name: "El Salvador", defaultCurrency: "USD", currencies: { USD: { locale: "es-SV", scale: 540 } } },
+  US: { name: "Estados Unidos", defaultCurrency: "USD", currencies: { USD: { locale: "en-US", scale: 540 } } },
 };
 
 const AMOUNT_PATTERN = /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m)\b)?)/;
@@ -118,18 +267,41 @@ function detectCountry(text, defaultCountry) {
   if (/\bhonduras\b|\bhn\b/.test(text)) return "HN";
   if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
   if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
-  if (/\busd\b|dolares?|\$/.test(text)) return "US";
   return COUNTRY_CONFIG[defaultCountry] ? defaultCountry : "CR";
 }
 
-function money(value, country) {
+function defaultCurrencyForCountry(country) {
   const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  return config.defaultCurrency;
+}
+
+function detectCurrency(text, country, defaultCurrency) {
+  if (/\busd\b|dolares?|\$/.test(text)) return "USD";
+  if (/\bcrc\b|colones?\b/.test(text)) return "CRC";
+  if (/\bmxn\b|pesos?\b/.test(text) && country === "MX") return "MXN";
+  if (/\bgtq\b|quetzales?\b/.test(text)) return "GTQ";
+  if (/\bhnl\b|lempiras?\b/.test(text)) return "HNL";
+  if (/\bnio\b|cordobas?\b/.test(text)) return "NIO";
+  return defaultCurrency || defaultCurrencyForCountry(country);
+}
+
+function currencyConfig(country, currency) {
+  const countryConfig = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+  const selectedCurrency = currency || countryConfig.defaultCurrency;
+  const config = countryConfig.currencies[selectedCurrency] || countryConfig.currencies[countryConfig.defaultCurrency] || COUNTRY_CONFIG.CR.currencies.CRC;
+  return { currency: selectedCurrency, locale: config.locale, scale: config.scale };
+}
+
+function money(value, countryOrProfile, currencyArg) {
+  const country = typeof countryOrProfile === "object" ? countryOrProfile.country : countryOrProfile;
+  const currency = typeof countryOrProfile === "object" ? countryOrProfile.currency : currencyArg;
+  const config = currencyConfig(country || "CR", currency);
   const rounded = Math.max(0, Math.round((Number(value) || 0) / config.scale));
   return config.currency + " " + rounded.toLocaleString(config.locale);
 }
 
-function toInternalAmount(value, country) {
-  const config = COUNTRY_CONFIG[country] || COUNTRY_CONFIG.CR;
+function toInternalAmount(value, country, currency) {
+  const config = currencyConfig(country || "CR", currency);
   return Math.max(0, Math.round((Number(value) || 0) * config.scale));
 }
 
@@ -190,6 +362,7 @@ function parseProfile(body, options) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const product = detectProduct(text);
   const country = detectCountry(text, options && options.defaultCountry);
+  const currency = detectCurrency(text, country, options && options.defaultCurrency);
 
   const income =
     amountAfter(
@@ -222,7 +395,7 @@ function parseProfile(body, options) {
       ["debo", "deuda", "deudas", "pago", "pagos", "cuotas", "gano", "ingreso", "salario", "sueldo", "monto", "valor"]
     ) ||
     findAmount(text, [
-      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:de\s+)?(?:prima|enganche|aporte)\b/,
+      /([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)\s*(?:usd|dolares?|crc|colones?|mxn|pesos?|gtq|quetzales?|hnl|lempiras?|nio|cordobas?)?\s*(?:de\s+)?(?:prima|enganche|aporte)\b/,
       /ahorrad[oa]s?\D{0,12}([\d.,]+(?:\s*(?:millones|millon|mill|mil|k|m))?)/,
     ]) ||
     0;
@@ -245,11 +418,12 @@ function parseProfile(body, options) {
 
   return {
     country,
+    currency,
     product,
-    income: toInternalAmount(income, country),
-    debt: toInternalAmount(debt, country),
-    downPayment: toInternalAmount(downPayment || downPaymentFromPercent, country),
-    assetValue: toInternalAmount(assetValue, country),
+    income: toInternalAmount(income, country, currency),
+    debt: toInternalAmount(debt, country, currency),
+    downPayment: toInternalAmount(downPayment || downPaymentFromPercent, country, currency),
+    assetValue: toInternalAmount(assetValue, country, currency),
     requestedYears: Math.max(1, Math.min(requestedYears || defaultYears, 30)),
   };
 }
@@ -257,11 +431,13 @@ function parseProfile(body, options) {
 function coerceProfile(profile) {
   const source = profile || {};
   const country = COUNTRY_CONFIG[source.country] ? source.country : "CR";
+  const currency = currencyConfig(country, source.currency).currency;
   const product = ["personal", "vehiculo", "hipoteca"].includes(source.product) ? source.product : "personal";
   const defaultYears = product === "hipoteca" ? 30 : product === "personal" ? 5 : 6;
 
   return {
     country,
+    currency,
     product,
     income: Math.max(0, Math.round(Number(source.income) || 0)),
     debt: Math.max(0, Math.round(Number(source.debt) || 0)),
@@ -291,13 +467,35 @@ function maxLoanFromDownPayment(downPayment, financeRatio) {
   return (downPayment * ratio) / (1 - ratio);
 }
 
+function conditionForProfile(bank, profile) {
+  if (bank.country && bank.country !== profile.country) return null;
+  const base = bank[profile.product];
+  if (!base) return null;
+
+  const bankCurrency = base.currency || defaultCurrencyForCountry(bank.country || profile.country);
+  const rate = base.rates ? Number(base.rates[profile.currency] || base.rates[bankCurrency] || base.rate) : Number(base.rate);
+
+  return {
+    ...base,
+    rate,
+    minIncome: toInternalAmount(base.minIncome, bank.country || profile.country, bankCurrency),
+    minAmount: toInternalAmount(base.minAmount, bank.country || profile.country, bankCurrency),
+  };
+}
+
+function productConditions(profile) {
+  return BANKS
+    .map((bank) => ({ bank: bank.name, condition: conditionForProfile(bank, profile) }))
+    .filter((item) => item.condition && Number.isFinite(item.condition.rate));
+}
+
 function simulate(profile) {
   const results = [];
   const netIncome = Math.max(0, profile.income - profile.debt);
   if (netIncome <= 0) return results;
 
   for (const bank of BANKS) {
-    const condition = bank[profile.product];
+    const condition = conditionForProfile(bank, profile);
     if (!condition) continue;
 
     const years = Math.min(profile.requestedYears, condition.maxYears);
@@ -453,7 +651,7 @@ function buildProfileAdvice(profile, analysis, results) {
     lines.push("1. Si van juntos, podemos sumar ingresos mancomunados.");
     lines.push("2. Conviene cuidar ambas deudas antes de aplicar.");
   } else if (analysis.debtConsolidator) {
-    lines.push(`1. Tus deudas actuales consumen ${bold(money(profile.debt, profile.country))} por mes.`);
+    lines.push(`1. Tus deudas actuales consumen ${bold(money(profile.debt, profile))} por mes.`);
     lines.push("2. Podemos explorar una compra con consolidacion para liberar cuota.");
   } else if (analysis.blemishedCredit) {
     lines.push("1. Si la deuda ya esta pagada, una carta de finiquito ayuda mucho.");
@@ -472,7 +670,7 @@ function buildProfileAdvice(profile, analysis, results) {
     lines.push("2. La clave es cuadrar con la regla edad mas plazo.");
   } else if (analysis.noSavings) {
     const minimumDown = profile.assetValue ? Math.round(profile.assetValue * 0.1) : 0;
-    if (minimumDown > 0) lines.push(`1. Para empezar, apunta a una prima minima de ${bold(money(minimumDown, profile.country))}.`);
+    if (minimumDown > 0) lines.push(`1. Para empezar, apunta a una prima minima de ${bold(money(minimumDown, profile))}.`);
     lines.push("2. Sin prima, casi ningun banco financia el 100%.");
   } else if (analysis.foreignResident) {
     lines.push("1. Hay bancos que manejan residentes con ingresos externos.");
@@ -542,7 +740,7 @@ function buildFollowUpReply(profile, results, analysis, body) {
   if (/(soft pull|consulta suave|validacion suave)/.test(text)) {
     return [
       "Si, podemos ir por esa ruta primero.",
-      `Mantengo tu ingreso de ${bold(money(profile.income, profile.country))} y ${profile.downPayment ? "tu prima de " + bold(money(profile.downPayment, profile.country)) : "tu perfil actual"} para esa comparacion.`,
+      `Mantengo tu ingreso de ${bold(money(profile.income, profile))} y ${profile.downPayment ? "tu prima de " + bold(money(profile.downPayment, profile)) : "tu perfil actual"} para esa comparacion.`,
       "La idea es precalificar primero y dejar la revision formal para despues.",
       closingQuestion("Queres que te deje primero el escenario mas cuidadoso con tu buro?"),
     ].join("\n");
@@ -552,7 +750,7 @@ function buildFollowUpReply(profile, results, analysis, body) {
     return [
       "Es una muy buena pregunta.",
       best
-        ? `La cuota de ${bold(money(best.payment, profile.country))} es una base estimada del credito.`
+        ? `La cuota de ${bold(money(best.payment, profile))} es una base estimada del credito.`
         : "La cuota que te mostre es una base estimada del credito.",
       "Todavia no estoy metiendo seguros, comisiones ni gastos finales del banco.",
       closingQuestion(profile.product === "vehiculo" ? "Queres que la deje mas conservadora sumando seguros estimados?" : "Queres que la deje mas conservadora sumando seguros y gastos estimados?"),
@@ -572,13 +770,13 @@ function buildFollowUpReply(profile, results, analysis, body) {
   if (/\b(tanto|ese monto|ese maximo|esa prima|con esa prima|me prestarian tanto|te parece mucho|demasiado)\b/.test(text)) {
     const lines = [
       "Es una excelente pregunta.",
-      `Ese techo se basa en tu ingreso de ${bold(money(profile.income, profile.country))} y deudas de ${bold(money(profile.debt, profile.country))}.`,
+      `Ese techo se basa en tu ingreso de ${bold(money(profile.income, profile))} y deudas de ${bold(money(profile.debt, profile))}.`,
     ];
 
     if (profile.assetValue && profile.downPayment) {
-      lines.push(lowDownPaymentInsight(profile) || `Con la prima de ${bold(money(profile.downPayment, profile.country))}, el banco revisa si el porcentaje que aportas calza con su politica.`);
+      lines.push(lowDownPaymentInsight(profile) || `Con la prima de ${bold(money(profile.downPayment, profile))}, el banco revisa si el porcentaje que aportas calza con su politica.`);
     } else if (profile.downPayment && profile.product !== "personal") {
-      lines.push(`Con una prima de ${bold(money(profile.downPayment, profile.country))}, tambien pesa cuanto porcentaje del ${profile.product === "vehiculo" ? "carro" : "bien"} estas poniendo.`);
+      lines.push(`Con una prima de ${bold(money(profile.downPayment, profile))}, tambien pesa cuanto porcentaje del ${profile.product === "vehiculo" ? "carro" : "bien"} estas poniendo.`);
       lines.push(profile.product === "vehiculo"
         ? `En vehiculos, lo normal es ver entre ${bold("10%")} y ${bold("20%")} de prima.`
         : `En vivienda, muchos bancos se sienten mas comodos desde ${bold("10%")} de prima hacia arriba.`);
@@ -693,7 +891,7 @@ function buildSpecialistStepMessage(profile, analysis, text) {
 function affordabilityGuidance(profile) {
   if (profile.product === "personal") return "";
 
-  const conditions = BANKS.map((bank) => ({ bank: bank.name, condition: bank[profile.product] })).filter((item) => item.condition);
+  const conditions = productConditions(profile);
   if (!conditions.length) return "";
 
   const requestedAmount = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
@@ -719,19 +917,19 @@ function affordabilityGuidance(profile) {
 
   if (!best) return "";
   if (best.extraIncome > 0 && best.extraDownPayment > 0) {
-    return `Te ayudaría subir ingresos en ${bold(money(best.extraIncome))} o la prima en ${bold(money(best.extraDownPayment))}.`;
+    return `Te ayudaría subir ingresos en ${bold(money(best.extraIncome, profile))} o la prima en ${bold(money(best.extraDownPayment, profile))}.`;
   }
   if (best.extraIncome > 0) {
-    return `Te ayudaría subir ingresos en ${bold(money(best.extraIncome))}.`;
+    return `Te ayudaría subir ingresos en ${bold(money(best.extraIncome, profile))}.`;
   }
   if (best.extraDownPayment > 0) {
-    return `Te ayudaría subir la prima en ${bold(money(best.extraDownPayment))}.`;
+    return `Te ayudaría subir la prima en ${bold(money(best.extraDownPayment, profile))}.`;
   }
   return "";
 }
 
 function optimizationIdeas(profile) {
-  const conditions = BANKS.map((bank) => ({ bank: bank.name, condition: bank[profile.product] })).filter((item) => item.condition);
+  const conditions = productConditions(profile);
   if (!conditions.length) return [];
 
   const targetLoan = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
@@ -747,7 +945,7 @@ function optimizationIdeas(profile) {
     const reachableLoan = Math.min(currentLoan, financeLimit);
     const extraDownPayment = Math.max(0, targetLoan - reachableLoan);
     if (extraDownPayment > 0) {
-      ideas.push(`1. Si subis la prima en ${bold(money(extraDownPayment, profile.country))}, te acercas a ${bold(bestRate.bank)}.`);
+      ideas.push(`1. Si subis la prima en ${bold(money(extraDownPayment, profile))}, te acercas a ${bold(bestRate.bank)}.`);
     }
 
     if (profile.debt > 0) {
@@ -755,16 +953,16 @@ function optimizationIdeas(profile) {
       const debtFreeLoan = Math.min(amountForPayment(debtFreeCapacity, bestRate.condition.rate, years), financeLimit || Number.MAX_SAFE_INTEGER);
       const uplift = currentLoan > 0 ? Math.round(((debtFreeLoan - currentLoan) / currentLoan) * 100) : 0;
       if (currentLoan <= 0 && debtFreeLoan > 0) {
-        ideas.push(`2. Si unificas deudas por ${bold(money(profile.debt, profile.country))}, vuelves a tener capacidad para aplicar.`);
+        ideas.push(`2. Si unificas deudas por ${bold(money(profile.debt, profile))}, vuelves a tener capacidad para aplicar.`);
       } else if (uplift > 0) {
-        ideas.push(`2. Si unificas deudas por ${bold(money(profile.debt, profile.country))}, tu capacidad sube cerca de ${bold(uplift + "%")}.`);
+        ideas.push(`2. Si unificas deudas por ${bold(money(profile.debt, profile))}, tu capacidad sube cerca de ${bold(uplift + "%")}.`);
       }
     }
 
     if (profile.requestedYears < bestRate.condition.maxYears) {
       const extendedYears = bestRate.condition.maxYears;
       const lowerPayment = paymentFor(Math.min(targetLoan, financeLimit || targetLoan), bestRate.condition.rate, extendedYears);
-      ideas.push(`3. Si amplias el plazo a ${bold(extendedYears + " anos")}, tu cuota baja a ${bold(money(lowerPayment, profile.country))}.`);
+      ideas.push(`3. Si amplias el plazo a ${bold(extendedYears + " anos")}, tu cuota baja a ${bold(money(lowerPayment, profile))}.`);
     }
   }
 
@@ -775,9 +973,9 @@ function documentFollowUpMessage(profile) {
   const hints = [];
   if (profile.product === "vehiculo") hints.push("buscás carro");
   if (profile.product === "hipoteca") hints.push("buscás casa");
-  if (profile.assetValue) hints.push("un valor meta de " + bold(money(profile.assetValue)));
-  if (profile.downPayment) hints.push("una prima de " + bold(money(profile.downPayment)));
-  if (profile.debt) hints.push("deudas por " + bold(money(profile.debt)));
+  if (profile.assetValue) hints.push("un valor meta de " + bold(money(profile.assetValue, profile)));
+  if (profile.downPayment) hints.push("una prima de " + bold(money(profile.downPayment, profile)));
+  if (profile.debt) hints.push("deudas por " + bold(money(profile.debt, profile)));
 
   const secondLine = hints.length
     ? "Ya tengo presente que " + hints.join(", ") + "."
@@ -801,13 +999,13 @@ function formatResults(profile, results, analysis) {
     intro || null,
     bold("Precalificacion estimada"),
     "Producto: " + bold(productTitle(profile.product)),
-    "Ingreso: " + bold(money(profile.income, profile.country)),
-    "Deudas: " + bold(money(profile.debt, profile.country)),
-    "Ingreso neto: " + bold(money(netIncome, profile.country)),
+    "Ingreso: " + bold(money(profile.income, profile)),
+    "Deudas: " + bold(money(profile.debt, profile)),
+    "Ingreso neto: " + bold(money(netIncome, profile)),
     profile.assetValue
-      ? "Valor de referencia: " + bold(money(profile.assetValue, profile.country)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment, profile.country)) : "")
+      ? "Valor de referencia: " + bold(money(profile.assetValue, profile)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment, profile)) : "")
       : hasDownPaymentOnly
-        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile.country)) + "."
+        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile)) + "."
         : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
     !realityCheck ? lowDownPaymentInsight(profile) || null : null,
     hasDownPaymentOnly ? "Tomo en cuenta tu capacidad y el porcentaje maximo que financia cada banco." : null,
@@ -827,7 +1025,7 @@ function formatResults(profile, results, analysis) {
     const comfortablePrime = Math.round(profile.assetValue * 0.2);
     lines.push("Antes de simular fino, te aterrizo algo importante.");
     lines.push(lowDownPaymentInsight(profile));
-    lines.push(`Para ese valor, la banca normalmente te pediria entre ${bold(money(minPrime, profile.country))} y ${bold(money(comfortablePrime, profile.country))} de prima.`);
+    lines.push(`Para ese valor, la banca normalmente te pediria entre ${bold(money(minPrime, profile))} y ${bold(money(comfortablePrime, profile))} de prima.`);
     lines.push("Con esa prima actual, hoy te expones a un rechazo temprano.");
     lines.push("Esto es una precalificacion estimada.");
     lines.push(closingQuestion("Queres que coticemos una propiedad menor o armamos un plan de ahorro para llegar a esa prima?"));
@@ -836,7 +1034,7 @@ function formatResults(profile, results, analysis) {
 
   if (!results.length) {
     lines.push(profile.downPayment && hasAssetContext
-      ? "Ya tome en cuenta tu prima de " + bold(money(profile.downPayment, profile.country)) + "."
+      ? "Ya tome en cuenta tu prima de " + bold(money(profile.downPayment, profile)) + "."
       : "Con esos datos no encontre una opcion clara.");
     lines.push(affordabilityGuidance(profile) || "Probemos con mas prima o menos monto.");
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
@@ -852,8 +1050,8 @@ function formatResults(profile, results, analysis) {
   }
 
   if (targetLoan > 0 && results[0] && results[0].amount < targetLoan) {
-    lines.push(`Hoy no llegas al monto objetivo de ${bold(money(targetLoan, profile.country))}.`);
-    lines.push(`Tu mejor techo actual ronda ${bold(money(results[0].amount, profile.country))}.`);
+    lines.push(`Hoy no llegas al monto objetivo de ${bold(money(targetLoan, profile))}.`);
+    lines.push(`Tu mejor techo actual ronda ${bold(money(results[0].amount, profile))}.`);
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
   }
 
@@ -862,10 +1060,10 @@ function formatResults(profile, results, analysis) {
       "────────────────",
       `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
       `${bold("Tasa de Interes")}: ${bold(result.rate.toFixed(2) + "%")}`,
-      `${bold("Monto Maximo de Prestamo")}: ${bold(money(result.amount, profile.country))}`,
-      `${bold("Cuota Mensual Estimada")}: ${bold(money(result.payment, profile.country))}`,
+      `${bold("Monto Maximo de Prestamo")}: ${bold(money(result.amount, profile))}`,
+      `${bold("Cuota Mensual Estimada")}: ${bold(money(result.payment, profile))}`,
       `${bold("Plazo")}: ${bold(result.years + " anos")}`,
-      hasDownPaymentOnly ? `Valor total aprox con tu prima: ${bold(money(result.amount + profile.downPayment, profile.country))}` : null
+      hasDownPaymentOnly ? `Valor total aprox con tu prima: ${bold(money(result.amount + profile.downPayment, profile))}` : null
     );
   });
 
@@ -890,13 +1088,13 @@ function formatResultsCompact(profile, results, analysis) {
     intro || null,
     bold("Precalificacion estimada"),
     "Producto: " + bold(productTitle(profile.product)),
-    "Ingreso: " + bold(money(profile.income, profile.country)),
-    "Deudas: " + bold(money(profile.debt, profile.country)),
-    "Ingreso neto: " + bold(money(netIncome, profile.country)),
+    "Ingreso: " + bold(money(profile.income, profile)),
+    "Deudas: " + bold(money(profile.debt, profile)),
+    "Ingreso neto: " + bold(money(netIncome, profile)),
     profile.assetValue
-      ? "Valor de referencia: " + bold(money(profile.assetValue, profile.country)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment, profile.country)) : "")
+      ? "Valor de referencia: " + bold(money(profile.assetValue, profile)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment, profile)) : "")
       : hasDownPaymentOnly
-        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile.country)) + "."
+        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile)) + "."
         : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
     !realityCheck ? lowDownPaymentInsight(profile) || null : null,
     hasDownPaymentOnly ? "Tomo en cuenta tu capacidad y el porcentaje maximo que financia cada banco." : null,
@@ -916,7 +1114,7 @@ function formatResultsCompact(profile, results, analysis) {
     const comfortablePrime = Math.round(profile.assetValue * 0.2);
     lines.push("Antes de simular fino, te aterrizo algo importante.");
     lines.push(lowDownPaymentInsight(profile));
-    lines.push(`Para ese valor, la banca normalmente te pediria entre ${bold(money(minPrime, profile.country))} y ${bold(money(comfortablePrime, profile.country))} de prima.`);
+    lines.push(`Para ese valor, la banca normalmente te pediria entre ${bold(money(minPrime, profile))} y ${bold(money(comfortablePrime, profile))} de prima.`);
     lines.push("Con esa prima actual, hoy te expones a un rechazo temprano.");
     lines.push("Esto es una precalificacion estimada.");
     lines.push(closingQuestion("Queres que coticemos una propiedad menor o armamos un plan de ahorro para llegar a esa prima?"));
@@ -925,7 +1123,7 @@ function formatResultsCompact(profile, results, analysis) {
 
   if (!results.length) {
     lines.push(profile.downPayment && hasAssetContext
-      ? "Ya tome en cuenta tu prima de " + bold(money(profile.downPayment, profile.country)) + "."
+      ? "Ya tome en cuenta tu prima de " + bold(money(profile.downPayment, profile)) + "."
       : "Con esos datos no encontre una opcion clara.");
     lines.push(affordabilityGuidance(profile) || "Probemos con mas prima o menos monto.");
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
@@ -941,8 +1139,8 @@ function formatResultsCompact(profile, results, analysis) {
   }
 
   if (targetLoan > 0 && results[0] && results[0].amount < targetLoan) {
-    lines.push(`Hoy no llegas al monto objetivo de ${bold(money(targetLoan, profile.country))}.`);
-    lines.push(`Tu mejor techo actual ronda ${bold(money(results[0].amount, profile.country))}.`);
+    lines.push(`Hoy no llegas al monto objetivo de ${bold(money(targetLoan, profile))}.`);
+    lines.push(`Tu mejor techo actual ronda ${bold(money(results[0].amount, profile))}.`);
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
   }
 
@@ -953,9 +1151,9 @@ function formatResultsCompact(profile, results, analysis) {
       "----------------",
       `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
       `• ${bold("Tasa")}: ${bold(result.rate.toFixed(2) + "%")} | ${bold("Plazo")}: ${bold(result.years + " anos")}`,
-      `• ${bold("Monto")}: ${bold(money(result.amount, profile.country))}`,
-      `• ${bold("Cuota")}: ${bold(money(result.payment, profile.country))}`,
-      hasDownPaymentOnly ? `• Valor total aprox con tu prima: ${bold(money(result.amount + profile.downPayment, profile.country))}` : null,
+      `• ${bold("Monto")}: ${bold(money(result.amount, profile))}`,
+      `• ${bold("Cuota")}: ${bold(money(result.payment, profile))}`,
+      hasDownPaymentOnly ? `• Valor total aprox con tu prima: ${bold(money(result.amount + profile.downPayment, profile))}` : null,
       `_Para aplicar responde: "${applyCommand}"_`
     );
   });
@@ -1000,6 +1198,7 @@ function buildReply(input) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
   const defaultCountry = input && input.defaultCountry;
+  const defaultCurrency = input && input.defaultCurrency;
 
   if (numMedia > 0) {
     return {
@@ -1026,7 +1225,7 @@ function buildReply(input) {
     };
   }
 
-  const profile = parseProfile(body, { defaultCountry });
+  const profile = parseProfile(body, { defaultCountry, defaultCurrency });
   const analysis = detectApplicantContext(body, profile);
 
   if (!profile.income && likelyDocumentFollowUp(body)) {
