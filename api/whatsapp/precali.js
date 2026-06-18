@@ -146,7 +146,20 @@ function explicitCountryFromBody(body) {
   if (/\bhonduras\b|\bhn\b/.test(text)) return "HN";
   if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
   if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
-  if (/\busd\b|dolares?\b/.test(text)) return "US";
+  if (/\busd\b|dolares?\b|\$/.test(text)) return "US";
+  return "";
+}
+
+function explicitCountryFromPhone(from) {
+  const phone = String(from || "").replace(/^whatsapp:/i, "").replace(/[^\d+]/g, "");
+  if (phone.startsWith("+506")) return "CR";
+  if (phone.startsWith("+507")) return "PA";
+  if (phone.startsWith("+502")) return "GT";
+  if (phone.startsWith("+504")) return "HN";
+  if (phone.startsWith("+505")) return "NI";
+  if (phone.startsWith("+503")) return "SV";
+  if (phone.startsWith("+52")) return "MX";
+  if (phone.startsWith("+1")) return "US";
   return "";
 }
 
@@ -185,15 +198,15 @@ function bodyAddsCoBorrower(body) {
   return /\b(sumamos|agregamos|metemos|incluimos|mi esposa|mi esposa gana|mi esposo|mi pareja|co-deudor|co deudor|copropietario|co-propietario|entre los dos|adicionales)\b/.test(normalizeForIntent(body));
 }
 
-function mergeDocumentAndMessageProfile(documentProfile, body) {
+function mergeDocumentAndMessageProfile(documentProfile, body, defaultCountry) {
   const doc = documentProfile || {};
-  const bodyProfile = parseProfile(body || "");
   const productHint = explicitProductFromBody(body);
   const countryHint = explicitCountryFromBody(body);
+  const bodyProfile = parseProfile(body || "", { defaultCountry: countryHint || defaultCountry });
   const notes = [];
 
   const merged = {
-    country: countryHint || doc.country || bodyProfile.country || "CR",
+    country: countryHint || defaultCountry || doc.country || bodyProfile.country || "CR",
     product: productHint || doc.product || bodyProfile.product || "personal",
     income: Number(doc.income) || Number(bodyProfile.income) || 0,
     debt: Math.max(Number(doc.debt) || 0, bodyProfile.debt >= 10000 ? Number(bodyProfile.debt) || 0 : 0),
@@ -294,9 +307,9 @@ function shouldUseRememberedProfile(input, rememberedProfile) {
 
 function mergeRememberedProfileWithBody(rememberedProfile, body) {
   const remembered = coerceProfile(rememberedProfile);
-  const current = parseProfile(body || "");
   const explicitProduct = explicitProductFromBody(body);
   const explicitCountry = explicitCountryFromBody(body);
+  const current = parseProfile(body || "", { defaultCountry: explicitCountry || remembered.country });
   const product = explicitProduct || remembered.product || current.product || "personal";
   const productChanged = product !== remembered.product;
   const debtCleared = bodyHasDebtZeroHint(body) || bodyHasDebtClearedHint(body);
@@ -327,12 +340,12 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   return { profile: merged, usedMessageHints: notes };
 }
 
-function mergeAiProfileWithBody(aiProfile, body) {
+function mergeAiProfileWithBody(aiProfile, body, defaultCountry) {
   const ai = aiProfile || {};
-  const current = parseProfile(body || "");
   const countryHint = explicitCountryFromBody(body);
   const productHint = explicitProductFromBody(body);
-  const country = countryHint || ai.country || current.country || "CR";
+  const current = parseProfile(body || "", { defaultCountry: countryHint || defaultCountry });
+  const country = countryHint || defaultCountry || ai.country || current.country || "CR";
 
   return {
     country,
@@ -353,7 +366,7 @@ async function buildReplyFromLocalDocument(input) {
 
   if (documentResult.ok && documentResult.profile && documentResult.profile.income) {
     const contextBody = buildContextBody(input);
-    const merged = mergeDocumentAndMessageProfile(documentResult.profile, contextBody);
+    const merged = mergeDocumentAndMessageProfile(documentResult.profile, contextBody, input.defaultCountry);
     const prefixLines = ["Ya leí tu documento."];
     const detected = [];
     for (const note of documentResult.notes || []) {
@@ -383,7 +396,7 @@ async function buildReplyFromLocalDocument(input) {
 
     if (ai && ai.confidence >= 0.45) {
       const contextBody = buildContextBody(input);
-      const merged = mergeDocumentAndMessageProfile(aiDocumentProfile(ai), contextBody);
+      const merged = mergeDocumentAndMessageProfile(aiDocumentProfile(ai), contextBody, input.defaultCountry);
       const prefixLines = aiDocumentPrefix(ai);
       if (merged.usedMessageHints.length) {
         prefixLines.push("Tomé en cuenta tu mensaje para: " + merged.usedMessageHints.join(", "));
@@ -421,6 +434,7 @@ module.exports = async function handler(req, res) {
       numMedia: params.NumMedia,
       mediaUrl: params.MediaUrl0,
       mediaType: params.MediaContentType0,
+      defaultCountry: explicitCountryFromPhone(params.From),
     };
 
     if (hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
@@ -478,7 +492,7 @@ module.exports = async function handler(req, res) {
             prefixLines.push(detected.join(" | "));
           }
 
-          const aiProfile = mergeAiProfileWithBody(ai.profile, input.body);
+          const aiProfile = mergeAiProfileWithBody(ai.profile, input.body, input.defaultCountry);
           reply = buildReplyFromProfile(aiProfile, { prefixLines });
         }
       } catch (aiError) {
@@ -491,7 +505,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (!usedRememberedProfile && hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
-      const parsed = parseProfile(input.body);
+      const parsed = parseProfile(input.body, { defaultCountry: input.defaultCountry });
       if (parsed.income) {
         rememberRecentProfile(input.from, parsed, input.body);
       }

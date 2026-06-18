@@ -109,7 +109,7 @@ function normalizeTypos(text) {
     .replace(/\bhipotekario\b/g, "hipotecario");
 }
 
-function detectCountry(text) {
+function detectCountry(text, defaultCountry) {
   if (/\bmexico\b|\bmx\b/.test(text)) return "MX";
   if (/\bpesos\b|\bmxn\b/.test(text)) return "MX";
   if (/\bguatemala\b|\bgt\b/.test(text)) return "GT";
@@ -119,7 +119,7 @@ function detectCountry(text) {
   if (/\bnicaragua\b|\bni\b/.test(text)) return "NI";
   if (/\bel salvador\b|\bsv\b/.test(text)) return "SV";
   if (/\busd\b|dolares?|\$/.test(text)) return "US";
-  return "CR";
+  return COUNTRY_CONFIG[defaultCountry] ? defaultCountry : "CR";
 }
 
 function money(value, country) {
@@ -186,10 +186,10 @@ function detectProduct(text) {
   return "personal";
 }
 
-function parseProfile(body) {
+function parseProfile(body, options) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const product = detectProduct(text);
-  const country = detectCountry(text);
+  const country = detectCountry(text, options && options.defaultCountry);
 
   const income =
     amountAfter(
@@ -999,6 +999,7 @@ function buildReply(input) {
   const body = input && input.body ? String(input.body) : "";
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
+  const defaultCountry = input && input.defaultCountry;
 
   if (numMedia > 0) {
     return {
@@ -1015,14 +1016,17 @@ function buildReply(input) {
   if (!text || (/^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)\b/.test(text) && !hasFinancialIntent)) {
     return {
       message: [
-        "Hola. Soy " + bold("PreCali IA") + ".",
-        "Te ayudo a precalificar y aplicar.",
-        closingQuestion("¿Buscás casa, carro o préstamo personal?"),
+        "Hola, soy " + bold("PreCali IA") + ", tu precalificador de confianza.",
+        "Estoy listo para ayudarte a solicitar el mejor credito para ti.",
+        "Dame ingresos, deudas, si es casa o carro, y la prima que puedes aportar.",
+        "Uso tu moneda local por defecto. Si quieres cotizar en dolares, dimelo.",
+        "Tambien puedes enviar orden patronal, boleta de pago o estado de cuenta.",
+        closingQuestion("Estas listo para precalificar?"),
       ].join("\n"),
     };
   }
 
-  const profile = parseProfile(body);
+  const profile = parseProfile(body, { defaultCountry });
   const analysis = detectApplicantContext(body, profile);
 
   if (!profile.income && likelyDocumentFollowUp(body)) {
