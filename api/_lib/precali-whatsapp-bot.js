@@ -395,6 +395,15 @@ function detectRequestedBank(text) {
   return "";
 }
 
+function applyCommandForBank(bankName) {
+  if (bankName === "BAC Credomatic") return "Aplicar BAC";
+  if (bankName === "Banco Nacional") return "Aplicar BN";
+  if (bankName === "Promerica") return "Aplicar Promerica";
+  if (bankName === "Lafise") return "Aplicar Lafise";
+  if (bankName === "DaviBank") return "Aplicar Davi";
+  return `Aplicar ${bankName}`;
+}
+
 function detectApplicantContext(body, profile) {
   const text = normalizeTypos(normalizeAmountWords(normalize(body)));
   const ageMatch = text.match(/\b(\d{2})\s*anos?\b/);
@@ -867,6 +876,100 @@ function formatResults(profile, results, analysis) {
   return lines.filter(Boolean).join("\n");
 }
 
+function formatResultsCompact(profile, results, analysis) {
+  const hasAssetContext = profile.product !== "personal";
+  const hasDownPaymentOnly = hasAssetContext && profile.downPayment > 0 && !profile.assetValue;
+  const netIncome = Math.max(0, profile.income - profile.debt);
+  const targetLoan = profile.assetValue ? Math.max(0, profile.assetValue - profile.downPayment) : 0;
+  const intro = analysis ? buildDiagnosticIntro(analysis) : "";
+  const realityCheck = needsDownPaymentRealityCheck(profile);
+  const applyOptions = [];
+  const lines = [
+    intro || null,
+    bold("Precalificacion estimada"),
+    "Producto: " + bold(productTitle(profile.product)),
+    "Ingreso: " + bold(money(profile.income, profile.country)),
+    "Deudas: " + bold(money(profile.debt, profile.country)),
+    "Ingreso neto: " + bold(money(netIncome, profile.country)),
+    profile.assetValue
+      ? "Valor de referencia: " + bold(money(profile.assetValue, profile.country)) + (profile.downPayment ? " | Prima: " + bold(money(profile.downPayment, profile.country)) : "")
+      : hasDownPaymentOnly
+        ? "Sin valor del bien. Prima detectada: " + bold(money(profile.downPayment, profile.country)) + "."
+        : "Sin valor del bien: estimo el monto maximo segun capacidad de pago.",
+    !realityCheck ? lowDownPaymentInsight(profile) || null : null,
+    hasDownPaymentOnly ? "Tomo en cuenta tu capacidad y el porcentaje maximo que financia cada banco." : null,
+    hasDownPaymentOnly ? "Aqui el monto es " + bold("prestamo maximo") + ", no el valor total del bien." : null,
+    "",
+  ];
+
+  if (netIncome <= 0) {
+    lines.push("No puedo simular con ingreso neto en cero.");
+    lines.push("Primero hay que bajar deudas o subir ingreso.");
+    lines.push(closingQuestion("Â¿Te gustaria que recalcule reduciendo tus deudas actuales o prefieres ver opciones con una prima mayor?"));
+    return lines.join("\n");
+  }
+
+  if (realityCheck) {
+    const minPrime = Math.round(profile.assetValue * 0.1);
+    const comfortablePrime = Math.round(profile.assetValue * 0.2);
+    lines.push("Antes de simular fino, te aterrizo algo importante.");
+    lines.push(lowDownPaymentInsight(profile));
+    lines.push(`Para ese valor, la banca normalmente te pediria entre ${bold(money(minPrime, profile.country))} y ${bold(money(comfortablePrime, profile.country))} de prima.`);
+    lines.push("Con esa prima actual, hoy te expones a un rechazo temprano.");
+    lines.push("Esto es una precalificacion estimada.");
+    lines.push(closingQuestion("Queres que coticemos una propiedad menor o armamos un plan de ahorro para llegar a esa prima?"));
+    return lines.join("\n");
+  }
+
+  if (!results.length) {
+    lines.push(profile.downPayment && hasAssetContext
+      ? "Ya tome en cuenta tu prima de " + bold(money(profile.downPayment, profile.country)) + "."
+      : "Con esos datos no encontre una opcion clara.");
+    lines.push(affordabilityGuidance(profile) || "Probemos con mas prima o menos monto.");
+    optimizationIdeas(profile).forEach((idea) => lines.push(idea));
+    buildProfileAdvice(profile, analysis || {}, results).forEach((line) => lines.push(line));
+    lines.push("Esto es una precalificacion estimada.");
+    lines.push(closingQuestion(defaultNextQuestion(analysis || {})));
+    return lines.join("\n");
+  }
+
+  if (results.length === 1) {
+    lines.push("Hoy veo una opcion clara con tu perfil.");
+    lines.push("Las demas quedan cortas en politica o capacidad.");
+  }
+
+  if (targetLoan > 0 && results[0] && results[0].amount < targetLoan) {
+    lines.push(`Hoy no llegas al monto objetivo de ${bold(money(targetLoan, profile.country))}.`);
+    lines.push(`Tu mejor techo actual ronda ${bold(money(results[0].amount, profile.country))}.`);
+    optimizationIdeas(profile).forEach((idea) => lines.push(idea));
+  }
+
+  results.slice(0, 3).forEach((result, index) => {
+    const applyCommand = applyCommandForBank(result.bank);
+    applyOptions.push(applyCommand);
+    lines.push(
+      "â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€",
+      `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
+      `• ${bold("Tasa")}: ${bold(result.rate.toFixed(2) + "%")} | ${bold("Plazo")}: ${bold(result.years + " anos")}`,
+      `• ${bold("Monto")}: ${bold(money(result.amount, profile.country))}`,
+      `• ${bold("Cuota")}: ${bold(money(result.payment, profile.country))}`,
+      hasDownPaymentOnly ? `• Valor total aprox con tu prima: ${bold(money(result.amount + profile.downPayment, profile.country))}` : null,
+      `_Para aplicar responde: "${applyCommand}"_`
+    );
+  });
+
+  lines.push("Esto es una precalificacion estimada.");
+  if ((profile.product === "vehiculo" || profile.product === "hipoteca") && !profile.assetValue) {
+    lines.push("Si me decis el valor del " + assetLabel(profile.product) + ", afino la cuota real.");
+  }
+  if (applyOptions.length) {
+    lines.push(`Si queres avanzar, responde ${bold(applyOptions.join(" / "))}.`);
+  }
+  buildProfileAdvice(profile, analysis || {}, results).forEach((line) => lines.push(line));
+  lines.push(closingQuestion(defaultNextQuestion(analysis || {})));
+  return lines.filter(Boolean).join("\n");
+}
+
 function buildReplyFromProfile(profile, options) {
   const cleanProfile = coerceProfile(profile);
   const allowEstimateWithoutDownPayment = Boolean(options && options.allowEstimateWithoutDownPayment);
@@ -884,7 +987,7 @@ function buildReplyFromProfile(profile, options) {
 
   const results = simulate(cleanProfile);
   const followUpMessage = followUpBody ? buildFollowUpReply(cleanProfile, results, analysis || {}, followUpBody) : "";
-  const message = followUpMessage || formatResults(cleanProfile, results, analysis);
+  const message = followUpMessage || formatResultsCompact(cleanProfile, results, analysis);
   return {
     message: prefixLines.length ? prefixLines.concat("", message).join("\n") : message,
   };
@@ -996,7 +1099,7 @@ function buildReply(input) {
   const missing = missingProfileMessage(profile);
   if (missing) return { message: missing };
 
-  return { message: formatResults(profile, simulate(profile), analysis) };
+  return { message: formatResultsCompact(profile, simulate(profile), analysis) };
 }
 
 module.exports = {
