@@ -226,6 +226,47 @@ function buildGroqDocumentPrompt(body, recentMessages, documentText) {
   ].join("\n");
 }
 
+const ADVISOR_COUNTRY_CONFIG = {
+  CR: { defaultCurrency: "CRC", currencies: { CRC: { scale: 1 }, USD: { scale: 540 } } },
+  MX: { defaultCurrency: "MXN", currencies: { MXN: { scale: 29 }, USD: { scale: 540 } } },
+  GT: { defaultCurrency: "GTQ", currencies: { GTQ: { scale: 68 }, USD: { scale: 540 } } },
+  PA: { defaultCurrency: "USD", currencies: { USD: { scale: 540 } } },
+  HN: { defaultCurrency: "HNL", currencies: { HNL: { scale: 22 }, USD: { scale: 540 } } },
+  NI: { defaultCurrency: "NIO", currencies: { NIO: { scale: 15 }, USD: { scale: 540 } } },
+  SV: { defaultCurrency: "USD", currencies: { USD: { scale: 540 } } },
+  US: { defaultCurrency: "USD", currencies: { USD: { scale: 540 } } },
+};
+
+function advisorCurrency(profile) {
+  const country = profile && profile.country ? profile.country : "CR";
+  const config = ADVISOR_COUNTRY_CONFIG[country] || ADVISOR_COUNTRY_CONFIG.CR;
+  return profile && profile.currency ? profile.currency : config.defaultCurrency;
+}
+
+function advisorCurrencyScale(profile) {
+  const country = profile && profile.country ? profile.country : "CR";
+  const config = ADVISOR_COUNTRY_CONFIG[country] || ADVISOR_COUNTRY_CONFIG.CR;
+  const currency = advisorCurrency(profile);
+  const currencyConfig = config.currencies[currency] || config.currencies[config.defaultCurrency];
+  return currencyConfig ? currencyConfig.scale : 1;
+}
+
+function advisorMoney(value, profile) {
+  const amount = Math.max(0, Math.round((Number(value) || 0) / advisorCurrencyScale(profile)));
+  return advisorCurrency(profile) + " " + amount.toLocaleString("es-CR");
+}
+
+function advisorRecommendedOption(results, profile) {
+  if (!Array.isArray(results) || !results.length) return null;
+  const netIncome = Math.max(1, Number(profile.income || 0) - Number(profile.debt || 0));
+  const affordable = results
+    .map((result) => ({ result, burden: Number(result.payment || 0) / netIncome }))
+    .filter((item) => item.burden <= 0.35)
+    .sort((a, b) => a.burden - b.burden || Number(a.result.rate || 0) - Number(b.result.rate || 0));
+  if (affordable.length) return affordable[0].result;
+  return results.slice().sort((a, b) => Number(a.payment || 0) - Number(b.payment || 0) || Number(a.rate || 0) - Number(b.rate || 0))[0];
+}
+
 async function fetchTwilioMedia(url) {
   if (!url) return null;
   const sid = process.env.TWILIO_ACCOUNT_SID;
@@ -406,26 +447,34 @@ function buildGroqAdvisorPrompt(input) {
   const profile = input.profile || {};
   const netIncome = Math.max(1, Number(profile.income || 0) - Number(profile.debt || 0));
   const options = Array.isArray(input.results) ? input.results.slice(0, 8) : [];
+  const recommended = advisorRecommendedOption(options, profile);
+  const recommendedBurden = recommended ? Math.round((Number(recommended.payment || 0) / netIncome) * 100) : 0;
   const optionLines = options.length
     ? options.map((item, index) => [
         `${index + 1}. ${item.bank}`,
         `tasa ${item.rate}%`,
-        `monto ${item.amount}`,
-        `cuota ${item.payment}`,
+        `monto ${advisorMoney(item.amount, profile)}`,
+        `cuota ${advisorMoney(item.payment, profile)}`,
         `carga ${Math.round((Number(item.payment || 0) / netIncome) * 100)}%`,
         `plazo ${item.years} anos`,
       ].join(" | ")).join("\n")
     : "(sin opciones calculadas)";
+  const recommendedLine = recommended
+    ? `${recommended.bank} | cuota ${advisorMoney(recommended.payment, profile)} | carga ${recommendedBurden}% | tasa ${recommended.rate}% | monto ${advisorMoney(recommended.amount, profile)}`
+    : "(sin recomendacion calculada)";
 
   return [
     "Sos PreCali IA, asesor financiero por WhatsApp.",
     "Responde como humano: claro, directo, empatico y util.",
     "Usa SOLO los datos del perfil y opciones calculadas abajo. No inventes bancos, tasas, aprobaciones ni requisitos.",
     "Si el usuario menciona un banco que aparece en las opciones calculadas, evalua ese banco; no digas que no existe.",
+    "Si el usuario pregunta cual banco conviene, usa la recomendacion calculada por PreCali y explica el criterio.",
     "No elijas solo por tasa. Considera cuota mensual, carga sobre ingreso y lo que el usuario pregunto.",
+    "No compares el monto del prestamo contra la prima. La prima se suma al prestamo para estimar valor total del bien.",
+    "Si no hay valor del carro/casa, aclara que falta ese dato para afinar la prima real.",
     "Si el usuario pregunta si deberia aplicar, da criterio y aclara que sigue siendo precalificacion.",
     "No mandes una tabla completa si el usuario hizo una duda puntual.",
-    "Maximo 5 lineas cortas. Termina con una pregunta concreta de siguiente paso.",
+    "Maximo 5 lineas cortas. Usa montos con moneda. Termina con una pregunta concreta de siguiente paso.",
     "",
     "Contexto reciente:",
     historyLines,
@@ -438,6 +487,9 @@ function buildGroqAdvisorPrompt(input) {
     "",
     "Opciones calculadas:",
     optionLines,
+    "",
+    "Recomendacion calculada por PreCali:",
+    recommendedLine,
     "",
     'Devuelve SOLO JSON valido con esta forma: {"message":"respuesta para WhatsApp","confidence":0.0}',
   ].join("\n");
@@ -485,8 +537,13 @@ async function writeAdvisorReplyWithPreCaliAi(input) {
   const parsed = safeJsonParse(outputText);
   if (!parsed || !parsed.message) throw new Error("groq_advisor_invalid_json");
 
+  const message = String(parsed.message).slice(0, 900);
+  if (/(monto|prestamo|credito).{0,40}(inferior|menor).{0,40}prima|prima.{0,40}(supera|mayor).{0,40}(monto|prestamo|credito)/i.test(message)) {
+    return null;
+  }
+
   return {
-    message: String(parsed.message).slice(0, 900),
+    message,
     confidence: Math.max(0, Math.min(1, Number(parsed.confidence || 0))),
   };
 }

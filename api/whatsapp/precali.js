@@ -567,7 +567,9 @@ module.exports = async function handler(req, res) {
         const prefixLines = [];
 
         if (ai && ai.confidence >= 0.45) {
-          prefixLines.push("Ya entendí tu mensaje" + (Number(input.numMedia || 0) > 0 ? " y el documento" : "") + ".");
+          if (Number(input.numMedia || 0) > 0) {
+            prefixLines.push("Analice tu documento.");
+          }
 
           if (ai.document && (ai.document.name || ai.document.idNumber || ai.document.employer || ai.document.netIncome)) {
             const detected = [];
