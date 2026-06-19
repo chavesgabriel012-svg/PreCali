@@ -346,6 +346,9 @@ async function aiFinalizeReply(input, profile, reply) {
     defaultCountry: input.defaultCountry,
     defaultCurrency: input.defaultCurrency,
   }));
+  if (!explicitProductFromBody(input.body || "") && !cleanProfile.income && cleanProfile.product === "personal") {
+    cleanProfile.product = null;
+  }
 
   try {
     const knowledge = buildPreCaliKnowledge({
