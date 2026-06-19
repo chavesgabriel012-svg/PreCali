@@ -653,6 +653,17 @@ function recommendedOption(results, profile) {
   return results.slice().sort((a, b) => a.payment - b.payment || a.rate - b.rate)[0];
 }
 
+function visibleResults(results, profile, limit = 3) {
+  const recommended = recommendedOption(results, profile);
+  const selected = [];
+  if (recommended) selected.push(recommended);
+  results.forEach((result) => {
+    if (selected.length >= limit) return;
+    if (!selected.some((item) => item.bank === result.bank)) selected.push(result);
+  });
+  return selected;
+}
+
 function mentionedResult(results, text) {
   const normalizedText = normalize(text);
   const compactText = normalizedText.replace(/[^a-z0-9]/g, "");
@@ -1087,7 +1098,7 @@ function formatResults(profile, results, analysis) {
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
   }
 
-  results.slice(0, 3).forEach((result, index) => {
+  visibleResults(results, profile).forEach((result, index) => {
     lines.push(
       "────────────────",
       `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
@@ -1176,7 +1187,7 @@ function formatResultsCompact(profile, results, analysis) {
     optimizationIdeas(profile).forEach((idea) => lines.push(idea));
   }
 
-  results.slice(0, 3).forEach((result, index) => {
+  visibleResults(results, profile).forEach((result, index) => {
     const applyCommand = applyCommandForBank(result.bank);
     applyOptions.push(applyCommand);
     lines.push(
