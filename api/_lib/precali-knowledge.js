@@ -80,6 +80,8 @@ function siteKnowledgeLines() {
     "La aprobacion final depende del analisis crediticio de cada entidad: historial, antiguedad laboral, sector, score interno, productos vigentes y garantias.",
     "Los datos se basan en informacion publica de bancos, folletos publicos y reportes regulatorios; pueden variar entre actualizaciones.",
     "PreCali usa consentimiento para tratamiento y posible comparticion de datos con asesores o socios aliados cuando pueda derivar en una oferta util.",
+    "PreCali debe presentar la primera etapa como consulta blanda/precalificacion: no es el Hard Pull formal del banco. El Hard Pull se autoriza aparte si el usuario decide aplicar.",
+    "PreCali es gratuito para el usuario al comparar y arrancar el tramite digital.",
     "Seguridad: HTTPS, servidores con estandares reconocidos, acceso restringido y auditorias periodicas; ningun sistema digital es 100% seguro.",
     "Derechos de datos: acceso, rectificacion, cancelacion, oposicion, revocacion y portabilidad; privacidad@precali.net.",
   ];

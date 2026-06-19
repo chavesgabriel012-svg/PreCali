@@ -144,6 +144,9 @@ function normalizeAmountWords(text) {
 
 function normalizeTypos(text) {
   return text
+    .replace(/\bmill\?n\b/g, "millon")
+    .replace(/\bcr\?dito\b/g, "credito")
+    .replace(/\bhipot\?ca\b/g, "hipoteca")
     .replace(/\bkiero\b/g, "quiero")
     .replace(/\bqiero\b/g, "quiero")
     .replace(/\bnesecito\b/g, "necesito")
@@ -155,6 +158,10 @@ function normalizeTypos(text) {
     .replace(/\bdevemos\b/g, "debemos")
     .replace(/\bpreztamo\b/g, "prestamo")
     .replace(/\bhipotekario\b/g, "hipotecario");
+}
+
+function normalizeInputText(body) {
+  return normalizeAmountWords(normalizeTypos(normalize(body)));
 }
 
 function detectCountry(text, defaultCountry) {
@@ -274,7 +281,7 @@ function minimumAssetInput(currency) {
 }
 
 function parseProfile(body, options) {
-  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const text = normalizeInputText(body);
   const product = detectProduct(text);
   const country = detectCountry(text, options && options.defaultCountry);
   const currency = detectCurrency(text, country, options && options.defaultCurrency);
@@ -474,7 +481,7 @@ function missingProfileMessage(profile) {
 }
 
 function likelyDocumentFollowUp(body) {
-  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const text = normalizeInputText(body);
   const mentionsIncomeContext = /(ingreso|ingresos|salario|sueldo|neto|devengo|orden patronal|colilla|boleta|documento|pdf|archivo|adjunto|estos son mis ingresos|te mando|no debo|sin deudas?|deuda cero)/.test(text);
   const mentionsIntent = /(carro|auto|vehiculo|veiculo|casa|vivienda|hipoteca|credito|prestamo|financiar)/.test(text);
   return mentionsIncomeContext && mentionsIntent;
@@ -531,11 +538,11 @@ function detectRequestedBank(text) {
 }
 
 function applyCommandForBank(bankName) {
-  return `Aplicar ${bankName}`;
+  return `Aplicar a ${bankName}`;
 }
 
 function detectApplicantContext(body, profile) {
-  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const text = normalizeInputText(body);
   const ageMatch = text.match(/\b(\d{2})\s*anos?\b/);
   const age = ageMatch ? Number(ageMatch[1]) : 0;
   const firstHome = /(primer hogar|primer departamento|primera casa|novio y yo|mi novio y yo|pareja|juntos ganamos|co-propietarios|co deudor)/.test(text);
@@ -665,6 +672,15 @@ function visibleResults(results, profile, limit = 3) {
   return selected;
 }
 
+function requiredDownPaymentForResult(result, profile) {
+  if (!result || !profile || profile.product === "personal") return 0;
+  if (profile.assetValue) return Math.max(0, profile.assetValue - result.amount);
+  if (profile.downPayment) return profile.downPayment;
+  const finance = Number(result.finance) || 0.85;
+  if (finance <= 0 || finance >= 1) return 0;
+  return Math.max(0, result.amount * ((1 - finance) / finance));
+}
+
 function mentionedResult(results, text) {
   const normalizedText = normalize(text);
   const compactText = normalizedText.replace(/[^a-z0-9]/g, "");
@@ -679,33 +695,34 @@ function mentionedResult(results, text) {
 }
 
 function buildOriginacionReply(body, profile, results) {
-  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const text = normalizeInputText(body);
   const choice = Array.isArray(results) && results.length ? recommendedOption(results, profile || {}) : null;
   const bankText = choice ? ` para ${bold(choice.bank)}` : "";
 
   if (/(bur[oó]|buro|score|mancha|historial|soft pull|hard pull|consulta|estudio crediticio|me baja|me afecta)/.test(text)) {
     return [
-      "Buena pregunta.",
-      `Primero te pedimos autorizacion para un ${bold("estudio crediticio inicial")} y perfilar tus opciones.`,
-      `Si te conviene aplicar${bankText}, ahi si autorizas la revision formal del banco.`,
-      closingQuestion("Nos autorizas realizar tu estudio crediticio inicial?"),
+      "Te entiendo perfectamente; haces bien en cuidar tu historial.",
+      `PreCali arranca con una ${bold("consulta blanda / Soft Pull")} para perfilar opciones sin ir banco por banco.`,
+      `El ${bold("Hard Pull")} del banco se autoriza aparte solo si decidis aplicar${bankText}.`,
+      closingQuestion("Me decis tu ingreso neto mensual para empezar sin afectar tu proceso?"),
     ].join("\n");
   }
 
   if (/(seguridad|datos|documentos|privacidad|orden patronal|colilla|boleta|cedula|informacion)/.test(text) && /(seguridad|datos|documentos|privacidad|manejan|guardan|envian|protegen)/.test(text)) {
     return [
       "Si, lo manejamos con mucho cuidado.",
-      "Usamos tus datos solo para perfilarte y preparar la aplicacion al banco que elijas.",
+      "Usamos HTTPS, acceso restringido y servidores con estandares reconocidos.",
+      "Tus datos se usan para perfilarte y preparar la aplicacion al banco que elijas.",
       "Antes de enviar nada al banco, te pedimos consentimiento por este chat.",
       closingQuestion("Queres que avancemos con la validacion inicial?"),
     ].join("\n");
   }
 
-  if (/(costo|cuesta|cobran|cobro|gratis|gratuito|comision|pagar|pago)/.test(text)) {
+  if (/(cuanto cuesta|costo|cobran|cobro|gratis|gratuito|comision|tengo que pagar|hay que pagar|pagar por precali|pagarles)/.test(text)) {
     return [
-      `Para vos, la precalificacion por PreCali es ${bold("sin costo")}.`,
-      "Nuestro modelo es trabajar con la entidad financiera cuando se concreta una aplicacion.",
-      "No te cobramos por comparar ni por iniciar el proceso digital.",
+      `Para vos, PreCali es ${bold("100% gratuito")}.`,
+      "No te cobramos por comparar ni por iniciar el tramite digital.",
+      "Nuestro modelo se sostiene con entidades o aliados cuando se concreta una oportunidad.",
       closingQuestion("Queres que sigamos con la aplicacion digital?"),
     ].join("\n");
   }
@@ -742,7 +759,7 @@ function compactRequirements(result) {
 }
 
 function buildFollowUpReply(profile, results, analysis, body) {
-  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const text = normalizeInputText(body);
   const best = results[0] || null;
   const originacionReply = buildOriginacionReply(body, profile, results);
   if (originacionReply) return originacionReply;
@@ -765,6 +782,16 @@ function buildFollowUpReply(profile, results, analysis, body) {
       items.map((item) => `• ${item}`).join("\n"),
       "Antes de enviarlo al banco, te pedimos consentimiento por este chat.",
       closingQuestion(choice ? `Queres que preparemos tu expediente para ${choice.bank}?` : "Queres que preparemos tu expediente digital?"),
+    ].join("\n");
+  }
+
+  if (/(sucursal|ir al banco|ir a banco|filas?|papeleo|que hago ahora|siguiente paso|ahora que)/.test(text) && results.length) {
+    const choice = mentionedResult(results, text) || recommendedOption(results, profile) || best;
+    return [
+      "Para nada, no hace falta empezar con filas.",
+      "PreCali prepara tu perfil y el expediente de forma digital.",
+      choice ? `Si queres avanzar con ${bold(choice.bank)}, responde ${bold(`Aplicar a ${choice.bank}`)}.` : "Si queres avanzar, responde con el banco que te interesa.",
+      closingQuestion("Le damos viaje?"),
     ].join("\n");
   }
 
@@ -940,6 +967,14 @@ function buildSpecialistStepMessage(profile, analysis, text) {
       "Si, se pueden sumar ingresos mancomunados.",
       "Eso mejora bastante la capacidad de compra.",
       closingQuestion("¿Cuanto pagan en deudas entre los dos?"),
+    ].join("\n");
+  }
+
+  if (analysis.debtConsolidator && profile.income && !profile.debt) {
+    return [
+      `Excelente. Con un ingreso de ${bold(money(profile.income, profile))} ya tenemos buena base.`,
+      "Para afinar perfecto, necesito la cuota mensual de esa tarjeta.",
+      closingQuestion("Y de paso, tenes algo ahorrado para la prima?"),
     ].join("\n");
   }
 
@@ -1223,12 +1258,12 @@ function formatResultsCompact(profile, results, analysis) {
     applyOptions.push(applyCommand);
     lines.push(
       "----------------",
-      `${index + 1}. ${bold("Banco")}: ${bold(result.bank)}`,
-      `• ${bold("Tasa")}: ${bold(result.rate.toFixed(2) + "%")} | ${bold("Plazo")}: ${bold(result.years + " anos")}`,
-      `• ${bold("Monto")}: ${bold(money(result.amount, profile))}`,
-      `• ${bold("Cuota")}: ${bold(money(result.payment, profile))}`,
+      `🏦 ${bold(result.bank)}`,
+      `• Cuota est.: ${bold(money(result.payment, profile) + "/mes")}`,
+      `• Prima requerida: ${bold(money(requiredDownPaymentForResult(result, profile), profile))} | Plazo: ${bold(result.years + " anos")}`,
+      `• Monto estimado: ${bold(money(result.amount, profile))}`,
       hasDownPaymentOnly ? `• Valor total aprox con tu prima: ${bold(money(result.amount + profile.downPayment, profile))}` : null,
-      `_Para aplicar responde: "${applyCommand}"_`
+      `_Para iniciar tu tramite digital responde: "${applyCommand}"_`
     );
   });
 
@@ -1237,7 +1272,7 @@ function formatResultsCompact(profile, results, analysis) {
     lines.push("Si me decis el valor del " + assetLabel(profile.product) + ", afino la cuota real.");
   }
   if (applyOptions.length) {
-    lines.push(`Para enviar tu precalificacion digital al banco, responde ${bold(applyOptions.join(" / "))}.`);
+    lines.push(`Con un solo clic preparamos tu perfil para el analista. Responde ${bold(applyOptions.join(" / "))}.`);
   }
   buildProfileAdvice(profile, analysis || {}, results).forEach((line) => lines.push(line));
   lines.push(closingQuestion(defaultNextQuestion(analysis || {})));
@@ -1269,7 +1304,7 @@ function buildReplyFromProfile(profile, options) {
 
 function buildReply(input) {
   const body = input && input.body ? String(input.body) : "";
-  const text = normalizeTypos(normalizeAmountWords(normalize(body)));
+  const text = normalizeInputText(body);
   const numMedia = Number(input && input.numMedia ? input.numMedia : 0);
   const defaultCountry = input && input.defaultCountry;
   const defaultCurrency = input && input.defaultCurrency;
@@ -1289,7 +1324,7 @@ function buildReply(input) {
   if (!text || (/^(hola|buenas|menu|ayuda|inicio|empezar|hey|ola)\b/.test(text) && !hasFinancialIntent)) {
     return {
       message: [
-        "Hola, soy " + bold("PreCali IA") + ", tu precalificador de confianza.",
+        "Hola, soy " + bold("PreCali AI") + ", tu precalificador de confianza.",
         "Soy tu puente digital con bancos en Mexico y Centroamerica.",
         "Te ayudo a comparar, perfilarte y aplicar sin filas ni papeleo fisico.",
         "Dame ingresos, deudas, si es casa o carro, y la prima que puedes aportar.",
