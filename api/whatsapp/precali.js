@@ -338,9 +338,22 @@ function missingDataForProfile(profile, body) {
   return missing;
 }
 
+function shouldKeepLocalAdvisorReply(input, reply) {
+  const body = String((input && input.body) || "").toLowerCase();
+  const message = String((reply && reply.message) || "");
+  if (!message) return false;
+
+  if (/Precalificacion estimada|🏦 \*/.test(message)) return true;
+  if (/consulta blanda|Soft Pull|Hard Pull|estudio crediticio inicial/.test(message)) return true;
+  if (/cuota mensual de esa tarjeta|deudas mensuales|Pagas alguna cuota hoy/.test(message)) return true;
+  if (/no hace falta empezar con filas|Aplicar a /.test(message) && /(sucursal|filas?|papeleo|que hago ahora|siguiente paso)/.test(body)) return true;
+  return false;
+}
+
 async function aiFinalizeReply(input, profile, reply) {
   if (!reply || !reply.message || Number(input.numMedia || 0) > 0) return reply;
   if (process.env.PRECALI_AI_AGENT_DISABLED === "1") return reply;
+  if (shouldKeepLocalAdvisorReply(input, reply)) return reply;
 
   const cleanProfile = coerceProfile(profile || parseProfile(input.body || "", {
     defaultCountry: input.defaultCountry,
