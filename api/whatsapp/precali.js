@@ -221,6 +221,11 @@ function bodyAddsCoBorrower(body) {
   return /\b(sumamos|agregamos|metemos|incluimos|mi esposa|mi esposa gana|mi esposo|mi pareja|co-deudor|co deudor|copropietario|co-propietario|entre los dos|adicionales)\b/.test(normalizeForIntent(body));
 }
 
+function bodyIsBareAmount(body) {
+  const text = normalizeForIntent(body).trim();
+  return /^(?:crc|usd|mxn|gtq|hnl|nio|\$|₡)?\s*\d[\d\s.,]*(?:\s*(?:millones|millon|mill|mil|k|m|colones|dolares|pesos|quetzales|lempiras|cordobas))?\s*$/.test(text);
+}
+
 function bodyAsksApplicationAdvice(body) {
   const text = normalizeForIntent(body);
   return /(deberia|debo|conviene|recomiendas|recomendarias|vale la pena|seria bueno|seria mejor).{0,50}aplicar|aplicar a.+\?/.test(text);
@@ -332,7 +337,7 @@ function buildContextBody(input) {
 }
 
 function shouldUseRememberedProfile(input, rememberedProfile) {
-  if (!rememberedProfile || !rememberedProfile.income || Number(input && input.numMedia ? input.numMedia : 0) > 0) return false;
+  if (!rememberedProfile || Number(input && input.numMedia ? input.numMedia : 0) > 0) return false;
   const body = String((input && input.body) || "").trim();
   if (!body) return false;
   const normalized = normalizeForIntent(body);
@@ -350,6 +355,7 @@ function shouldUseRememberedProfile(input, rememberedProfile) {
   }
 
   const current = parseProfile(body, { defaultCountry: rememberedProfile.country, defaultCurrency: rememberedProfile.currency });
+  if (bodyIsBareAmount(body)) return true;
   if (current.income) return hasFollowUpCue || hasValidationQuestion;
   if (current.downPayment >= 10000 || current.assetValue >= 100000 || current.debt >= 10000) return true;
   if (bodyHasDebtZeroHint(body)) return true;
@@ -372,15 +378,22 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   const productChanged = product !== remembered.product;
   const debtCleared = bodyHasDebtZeroHint(body) || bodyHasDebtClearedHint(body);
   const addCoBorrower = bodyAddsCoBorrower(body) && current.income;
+  const bareAmount = bodyIsBareAmount(body || "");
+  const bareAsIncome = bareAmount && !remembered.income
+    ? parseProfile("gano " + body, { defaultCountry: country, defaultCurrency: currency }).income
+    : 0;
+  const bareAsDownPayment = bareAmount && remembered.income && product !== "personal" && !remembered.downPayment
+    ? parseProfile("prima " + body, { defaultCountry: country, defaultCurrency: currency }).downPayment
+    : 0;
   const notes = [];
 
   const merged = {
     country,
     currency: explicitCurrency || current.currency || currency,
     product,
-    income: addCoBorrower ? (remembered.income || 0) + current.income : current.income || remembered.income || 0,
+    income: addCoBorrower ? (remembered.income || 0) + current.income : current.income || bareAsIncome || remembered.income || 0,
     debt: debtCleared ? 0 : current.debt >= 10000 ? current.debt : remembered.debt || 0,
-    downPayment: current.downPayment >= 10000 ? current.downPayment : remembered.downPayment || 0,
+    downPayment: current.downPayment >= 10000 ? current.downPayment : bareAsDownPayment || remembered.downPayment || 0,
     assetValue: current.assetValue >= 100000 ? current.assetValue : productChanged ? 0 : remembered.assetValue || 0,
     requestedYears: bodyHasYearHint(body) ? current.requestedYears : productChanged ? defaultYearsForProduct(product) : remembered.requestedYears || defaultYearsForProduct(product),
   };
@@ -388,11 +401,11 @@ function mergeRememberedProfileWithBody(rememberedProfile, body) {
   if (productChanged) notes.push("producto");
   if (addCoBorrower) {
     notes.push("ingreso mancomunado");
-  } else if (current.income) {
+  } else if (current.income || bareAsIncome) {
     notes.push("ingreso");
   }
   if (current.assetValue >= 100000) notes.push("monto");
-  if (current.downPayment >= 10000) notes.push("prima");
+  if (current.downPayment >= 10000 || bareAsDownPayment) notes.push("prima");
   if (current.debt >= 10000 || debtCleared) notes.push("deudas");
   if (explicitCurrency) notes.push("moneda");
   if (bodyHasYearHint(body)) notes.push("plazo");
@@ -528,10 +541,10 @@ module.exports = async function handler(req, res) {
     if (!reply && shouldUseRememberedProfile(input, rememberedProfile)) {
       const merged = mergeRememberedProfileWithBody(rememberedProfile, input.body);
       const prefixLines = [];
-      if (!bodyAsksApplicationAdvice(input.body) && merged.usedMessageHints.length) {
+      if (!bodyAsksApplicationAdvice(input.body) && merged.usedMessageHints.length && !bodyIsBareAmount(input.body)) {
         prefixLines.push("Actualice tu escenario con lo nuevo.");
       }
-      if (merged.usedMessageHints.length) {
+      if (merged.usedMessageHints.length && !bodyIsBareAmount(input.body)) {
         prefixLines.push("Actualicé: " + merged.usedMessageHints.join(", ") + ".");
       }
       rememberRecentProfile(input.from, merged.profile, buildContextBody(input));
@@ -555,7 +568,7 @@ module.exports = async function handler(req, res) {
         : buildReplyFromProfile(merged.profile, {
             prefixLines,
             followUpBody: input.body,
-            allowEstimateWithoutDownPayment: true,
+            allowEstimateWithoutDownPayment: bodyNeedsAdvisorReply(input.body) && !bodyIsBareAmount(input.body),
           });
     }
 
@@ -595,7 +608,7 @@ module.exports = async function handler(req, res) {
 
     if (!usedRememberedProfile && hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
       const parsed = parseProfile(input.body, { defaultCountry: input.defaultCountry, defaultCurrency: input.defaultCurrency });
-      if (parsed.income) {
+      if (parsed.income || explicitProductFromBody(input.body) || parsed.downPayment >= 10000 || parsed.assetValue >= 100000 || parsed.debt >= 10000) {
         rememberRecentProfile(input.from, parsed, input.body);
       }
     }
