@@ -1,6 +1,7 @@
 const { buildReply, buildReplyFromProfile, coerceProfile, parseProfile, simulate } = require("../_lib/precali-whatsapp-bot");
 const { analyzeWithPreCaliAi, shouldUseAiForMessage, writeAdvisorReplyWithPreCaliAi } = require("../_lib/precali-ai");
 const { readPreCaliDocument } = require("../_lib/precali-documents");
+const { buildPreCaliKnowledge, fetchLiveBankKnowledge } = require("../_lib/precali-knowledge");
 const { fetchTwilioMedia } = require("../_lib/twilio-media");
 
 const CONTEXT_TTL_MS = 20 * 60 * 1000;
@@ -182,6 +183,7 @@ function explicitCountryFromPhone(from) {
   if (phone.startsWith("+504")) return "HN";
   if (phone.startsWith("+505")) return "NI";
   if (phone.startsWith("+503")) return "SV";
+  if (phone.startsWith("+521")) return "MX";
   if (phone.startsWith("+52")) return "MX";
   if (phone.startsWith("+1")) return "US";
   return "";
@@ -321,6 +323,61 @@ function localDocumentFallbackMessage(documentResult) {
   base.push("Tambien podes escribirme algo asi:");
   base.push("Gano 1500000, debo 250000, quiero vehiculo de 15000000, tengo 2000000 de prima, a 6 anos.");
   return base.join("\n");
+}
+
+function missingDataForProfile(profile, body) {
+  const clean = coerceProfile(profile || {});
+  const missing = [];
+  const explicitProduct = explicitProductFromBody(body || "");
+  if (!explicitProduct && clean.product === "personal" && !clean.income) missing.push("tipo de credito");
+  if (!clean.income) missing.push("ingreso mensual neto");
+  if (clean.product !== "personal" && !clean.downPayment) missing.push("prima o enganche");
+  if (clean.product !== "personal" && clean.income && clean.downPayment && !clean.assetValue) {
+    missing.push("valor del bien para afinar cuota real");
+  }
+  return missing;
+}
+
+async function aiFinalizeReply(input, profile, reply) {
+  if (!reply || !reply.message || Number(input.numMedia || 0) > 0) return reply;
+  if (process.env.PRECALI_AI_AGENT_DISABLED === "1") return reply;
+
+  const cleanProfile = coerceProfile(profile || parseProfile(input.body || "", {
+    defaultCountry: input.defaultCountry,
+    defaultCurrency: input.defaultCurrency,
+  }));
+
+  try {
+    const knowledge = buildPreCaliKnowledge({
+      profile: cleanProfile,
+      defaultCountry: input.defaultCountry,
+    });
+    const liveLines = await fetchLiveBankKnowledge({
+      body: input.body,
+      profile: cleanProfile,
+    });
+    if (liveLines.length) {
+      knowledge.lines = knowledge.lines.concat("Contexto web oficial en vivo:", liveLines).slice(0, 40);
+    }
+
+    const advisorReply = await writeAdvisorReplyWithPreCaliAi({
+      ...input,
+      profile: cleanProfile,
+      results: cleanProfile.income ? simulate(cleanProfile) : [],
+      recentMessages: readRecentMessages(input.from),
+      knowledge,
+      fallbackReply: reply.message,
+      missingData: missingDataForProfile(cleanProfile, input.body),
+    });
+
+    if (advisorReply && advisorReply.confidence >= 0.45) {
+      return { message: advisorReply.message };
+    }
+  } catch (_) {
+    return reply;
+  }
+
+  return reply;
 }
 
 function buildContextBody(input) {
@@ -519,6 +576,7 @@ module.exports = async function handler(req, res) {
     }
 
     let reply;
+    let replyProfile = null;
     let usedRememberedProfile = false;
     if (Number(input.numMedia || 0) > 0 && input.mediaUrl) {
       try {
@@ -540,6 +598,7 @@ module.exports = async function handler(req, res) {
 
     if (!reply && shouldUseRememberedProfile(input, rememberedProfile)) {
       const merged = mergeRememberedProfileWithBody(rememberedProfile, input.body);
+      replyProfile = merged.profile;
       const prefixLines = [];
       if (!bodyAsksApplicationAdvice(input.body) && merged.usedMessageHints.length && !bodyIsBareAmount(input.body)) {
         prefixLines.push("Actualice tu escenario con lo nuevo.");
@@ -549,27 +608,11 @@ module.exports = async function handler(req, res) {
       }
       rememberRecentProfile(input.from, merged.profile, buildContextBody(input));
       usedRememberedProfile = true;
-      let advisorReply = null;
-      if (bodyNeedsAdvisorReply(input.body) && !bodyIsDirectApplicationCommand(input.body) && !bodyAsksApplicationAdvice(input.body)) {
-        try {
-          advisorReply = await writeAdvisorReplyWithPreCaliAi({
-            ...input,
-            profile: merged.profile,
-            results: simulate(merged.profile),
-            recentMessages: readRecentMessages(input.from),
-          });
-        } catch (advisorError) {
-          advisorReply = null;
-        }
-      }
-
-      reply = advisorReply && advisorReply.confidence >= 0.55
-        ? { message: advisorReply.message }
-        : buildReplyFromProfile(merged.profile, {
-            prefixLines,
-            followUpBody: input.body,
-            allowEstimateWithoutDownPayment: bodyNeedsAdvisorReply(input.body) && !bodyIsBareAmount(input.body),
-          });
+      reply = buildReplyFromProfile(merged.profile, {
+        prefixLines,
+        followUpBody: input.body,
+        allowEstimateWithoutDownPayment: bodyNeedsAdvisorReply(input.body) && !bodyIsBareAmount(input.body),
+      });
     }
 
     if (!reply && shouldUseAiForMessage(input)) {
@@ -595,6 +638,7 @@ module.exports = async function handler(req, res) {
           }
 
           const aiProfile = mergeAiProfileWithBody(ai.profile, input.body, input.defaultCountry);
+          replyProfile = aiProfile;
           reply = buildReplyFromProfile(aiProfile, { prefixLines });
         }
       } catch (aiError) {
@@ -604,6 +648,10 @@ module.exports = async function handler(req, res) {
 
     if (!reply) {
       reply = buildReply(input);
+      replyProfile = readRecentProfile(input.from) || parseProfile(input.body || "", {
+        defaultCountry: input.defaultCountry,
+        defaultCurrency: input.defaultCurrency,
+      });
     }
 
     if (!usedRememberedProfile && hasUsefulBodyText(input.body) && Number(input.numMedia || 0) <= 0) {
@@ -612,6 +660,8 @@ module.exports = async function handler(req, res) {
         rememberRecentProfile(input.from, parsed, input.body);
       }
     }
+
+    reply = await aiFinalizeReply(input, replyProfile || readRecentProfile(input.from), reply);
 
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/xml; charset=utf-8");

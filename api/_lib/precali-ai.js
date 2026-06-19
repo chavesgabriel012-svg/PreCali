@@ -462,24 +462,34 @@ function buildGroqAdvisorPrompt(input) {
   const recommendedLine = recommended
     ? `${recommended.bank} | cuota ${advisorMoney(recommended.payment, profile)} | carga ${recommendedBurden}% | tasa ${recommended.rate}% | monto ${advisorMoney(recommended.amount, profile)}`
     : "(sin recomendacion calculada)";
+  const knowledgeLines = input.knowledge && Array.isArray(input.knowledge.lines) && input.knowledge.lines.length
+    ? input.knowledge.lines.slice(0, 44).map((item, index) => `${index + 1}. ${String(item)}`).join("\n")
+    : "(sin base de conocimiento adicional)";
+  const fallbackReply = input.fallbackReply ? String(input.fallbackReply).slice(0, 1600) : "(sin borrador)";
+  const missingData = Array.isArray(input.missingData) && input.missingData.length
+    ? input.missingData.join(", ")
+    : "(ninguno detectado)";
 
   return [
     "Sos PreCali IA, asistente experto en originacion digital de creditos para Mexico y Centroamerica.",
-    "Tu objetivo es resolver dudas y guiar al usuario a aplicar formalmente al banco elegido por este chat.",
+    "Tu objetivo es conversar como asesor crediticio humano: entender, explicar, calcular cuando haya datos y guiar al usuario a aplicar formalmente al banco elegido por este chat.",
     "Presenta a PreCali como puente digital entre el usuario y los bancos: perfilamos, comparamos y preparamos la aplicacion sin filas ni papeleo fisico.",
     "Responde como humano: claro, directo, empatico, confiable y con modismos suaves del pais detectado.",
-    "Usa SOLO los datos del perfil y opciones calculadas abajo. No inventes bancos, tasas, aprobaciones ni requisitos.",
+    "Usa SOLO el perfil, opciones calculadas y base de conocimiento abajo. No inventes bancos, tasas, aprobaciones, requisitos, alianzas ni procesos.",
     "Si el usuario menciona un banco que aparece en las opciones calculadas, evalua ese banco; no digas que no existe.",
     "Si el usuario pregunta cual banco conviene, usa la recomendacion calculada por PreCali y explica el criterio.",
     "No elijas solo por tasa. Considera cuota mensual, carga sobre ingreso y lo que el usuario pregunto.",
     "No compares el monto del prestamo contra la prima. La prima se suma al prestamo para estimar valor total del bien.",
     "Si no hay valor del carro/casa, aclara que falta ese dato para afinar la prima real.",
+    "Si faltan datos, NO hagas tabla. Responde natural y pide solo el siguiente dato mas importante.",
+    "Si ya hay resultados, puedes resumir maximo 3 opciones o recomendar una, segun la pregunta.",
+    "Si la pregunta es educativa o de objecion, responde directamente con la base de conocimiento y vuelve al siguiente paso.",
     "Si el usuario pregunta por buro, score, soft pull o hard pull: explica que primero pedimos autorizacion para un estudio crediticio inicial; si decide aplicar, autoriza aparte la revision formal del banco.",
     "Si pregunta por costo: di que la precalificacion por PreCali es sin costo para el usuario y que no cobramos por comparar ni iniciar el proceso digital.",
-    "Si pregunta por seguridad: di que usamos sus datos solo para perfilar y preparar la aplicacion al banco elegido, y que antes de enviar documentos pedimos consentimiento. No prometas AES-256 ni destruccion en 30 dias salvo que aparezca en los datos.",
+    "Si pregunta por seguridad: menciona HTTPS, acceso restringido, servidores con estandares reconocidos y consentimiento. No prometas AES-256 ni destruccion en 30 dias.",
     "Si el usuario pregunta si deberia aplicar, da criterio, aclara que sigue siendo precalificacion y pide autorizacion para iniciar el estudio crediticio.",
     "No mandes una tabla completa si el usuario hizo una duda puntual.",
-    "Maximo 4 lineas cortas. Usa montos con moneda. Termina con una pregunta concreta orientada a aplicar o autorizar el estudio inicial.",
+    "Maximo 6 lineas cortas. Usa montos con moneda. Termina con una pregunta concreta orientada al siguiente paso.",
     "",
     "Contexto reciente:",
     historyLines,
@@ -490,11 +500,20 @@ function buildGroqAdvisorPrompt(input) {
     "Perfil calculado:",
     JSON.stringify(profile),
     "",
+    "Datos faltantes detectados:",
+    missingData,
+    "",
     "Opciones calculadas:",
     optionLines,
     "",
     "Recomendacion calculada por PreCali:",
     recommendedLine,
+    "",
+    "Base de conocimiento PreCali y bancos:",
+    knowledgeLines,
+    "",
+    "Borrador deterministico disponible para reescribir sin perder datos:",
+    fallbackReply,
     "",
     'Devuelve SOLO JSON valido con esta forma: {"message":"respuesta para WhatsApp","confidence":0.0}',
   ].join("\n");
@@ -512,12 +531,12 @@ async function writeAdvisorReplyWithPreCaliAi(input) {
     },
     body: JSON.stringify({
       model: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
-      temperature: 0.35,
+      temperature: 0.45,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: "Sos PreCali IA. Redacta respuestas financieras breves usando solo los datos proporcionados.",
+          content: "Sos PreCali IA, asesor crediticio conversacional. Responde con criterio financiero usando solo datos proporcionados y guiando al siguiente paso.",
         },
         {
           role: "user",
