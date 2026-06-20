@@ -110,7 +110,7 @@ function calcularPrecalificacion(rawArgs) {
 
   const results = simulate(profile);
   const incomeDisplay = toDisplay(profile.income);
-  const opciones = results.slice(0, 6).map((r) => ({
+  const opciones = results.slice(0, 3).map((r) => ({
     banco: r.bank,
     tasa_anual_pct: Number(r.rate.toFixed(2)),
     plazo_anos: r.years,
