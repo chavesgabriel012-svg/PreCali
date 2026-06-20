@@ -110,12 +110,15 @@ function calcularPrecalificacion(rawArgs) {
 
   const results = simulate(profile);
   const incomeDisplay = toDisplay(profile.income);
+  const formatAmount = (displayValue) => `${profile.currency} ${Math.max(0, Math.round(Number(displayValue) || 0)).toLocaleString("es-CR")}`;
   const opciones = results.slice(0, 3).map((r) => ({
     banco: r.bank,
     tasa_anual_pct: Number(r.rate.toFixed(2)),
     plazo_anos: r.years,
     monto_maximo: toDisplay(r.amount),
+    monto_maximo_formateado: formatAmount(toDisplay(r.amount)),
     cuota_mensual: toDisplay(r.payment),
+    cuota_mensual_formateada: formatAmount(toDisplay(r.payment)),
     porcentaje_ingreso_a_cuota: incomeDisplay > 0 ? Math.round((toDisplay(r.payment) / incomeDisplay) * 100) : null,
   }));
   const recommended = recommendedResult(results, profile);
@@ -138,8 +141,10 @@ function calcularPrecalificacion(rawArgs) {
           banco: recommended.bank,
           motivo: "menor carga de cuota sobre el ingreso, dentro de un limite sano",
           cuota_mensual: toDisplay(recommended.payment),
+          cuota_mensual_formateada: formatAmount(toDisplay(recommended.payment)),
           tasa_anual_pct: Number(recommended.rate.toFixed(2)),
           monto_maximo: toDisplay(recommended.amount),
+          monto_maximo_formateado: formatAmount(toDisplay(recommended.amount)),
         }
       : null,
     avisos: buildWarnings(
