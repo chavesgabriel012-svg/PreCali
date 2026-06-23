@@ -23,7 +23,7 @@ function extractAmount(text) {
   if (!raw) return null;
   if (/^(0|cero|no\s*tengo|nada|ningun[oa]?|sin)$/i.test(raw)) return 0;
 
-  const match = raw.match(/(\d+(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(millones?|mill\b|mil\b|k\b|m\b)?/);
+  const match = raw.match(/(\d+(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(millon(?:es)?|mill\b|mil\b|k\b|m\b)?/);
   if (!match || !match[1]) return null;
 
   let numStr = match[1].replace(/\s/g, "");
@@ -62,6 +62,10 @@ function exactAmountMessage(label) {
   return `Necesito el monto exacto de ${label}. Escribilo solo como numero, por ejemplo: 150000.`;
 }
 
+function totalDataSteps(product) {
+  return product === "personal" ? 2 : 3;
+}
+
 function money(value, currency) {
   return currency + " " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("es-CR");
 }
@@ -81,6 +85,49 @@ function topBankOptions(session) {
   return visibleOpciones(session.lastResults)
     .slice(0, 3)
     .map((o, i) => ({ id: "banco_" + i, title: o.banco.slice(0, 20) }));
+}
+
+function coerceButtonPayload(session, buttonPayload, bodyText) {
+  if (buttonPayload) return buttonPayload;
+  const text = normalize(bodyText);
+  if (!text) return "";
+
+  if (session.step === "post_resultado") {
+    const hasOptions = Boolean(session.lastResults && session.lastResults.opciones && session.lastResults.opciones.length);
+    if (/^(1|aplicar|si aplicar|si)$/.test(text)) return hasOptions ? "aplicar" : "otro_dato";
+    if (/^(2|requisitos|ver requisitos|analisis|ver analisis)$/.test(text)) return hasOptions ? "requisitos" : "menu";
+    if (/^(3|ahora no|mas tarde|no)$/.test(text)) return "ahora_no";
+  }
+
+  if (session.step === "elegir_banco_aplicar" || session.step === "elegir_banco_requisitos") {
+    if (/^[123]$/.test(text)) return "banco_" + (Number(text) - 1);
+  }
+
+  if (session.step === "lead_fuente_ingresos") {
+    if (/^(1|asalariado)$/.test(text)) return "asalariado";
+    if (/^(2|independiente)$/.test(text)) return "independiente";
+    if (/^(3|duda|tengo duda)$/.test(text)) return "duda";
+  }
+
+  if (session.step === "autorizar_soft_precali") {
+    if (/^(1|si|autorizo|acepto|dale)$/.test(text)) return "soft_precali_si";
+    if (/^(2|duda|tengo duda)$/.test(text)) return "duda";
+    if (/^(3|no|mejor no)$/.test(text)) return "soft_precali_no";
+  }
+
+  if (session.step === "confirmar_datos_extraidos") {
+    if (/^(1|si|correcto|ok|esta bien)$/.test(text)) return "datos_ok";
+    if (/^(2|corregir|datos corregir)$/.test(text)) return "datos_corregir";
+    if (/^(3|duda|tengo duda)$/.test(text)) return "duda";
+  }
+
+  if (session.step === "confirmar_hard_pull") {
+    if (/^(1|si|autorizo|autorizo al banco)$/.test(text)) return "hard_si";
+    if (/^(2|duda|tengo duda)$/.test(text)) return "duda";
+    if (/^(3|no|mejor no)$/.test(text)) return "hard_no";
+  }
+
+  return "";
 }
 
 function bankFromSelection(session, buttonPayload, bodyText) {
@@ -219,7 +266,7 @@ async function stepPedirProducto({ session, buttonPayload, bodyText, defaultCoun
 
   return {
     actions: [actionTexto(
-      `Perfecto, *${PRODUCT_LABEL[product]}*.\nNecesito tu ingreso neto mensual exacto.\nEscribilo solo como numero, por ejemplo: 850000.`
+      `Perfecto, *${PRODUCT_LABEL[product]}*.\nPara armar tu comparacion voy a pedirte los datos paso a paso.\n\nDale 👍 *(1/${totalDataSteps(product)})*\n¿Cuanto es tu ingreso neto mensual exacto?`
     )],
     session: s,
   };
@@ -233,7 +280,7 @@ async function stepPedirIngreso({ session, bodyText }) {
 
   const s = { ...session, step: "pedir_deudas", profile: { ...session.profile, income: amount } };
   return {
-    actions: [actionTexto("Ahora necesito el total exacto de tus deudas mensuales.\nInclui tarjetas, prestamos u otras cuotas.\nSi no tenes deudas, escribi 0.")],
+    actions: [actionTexto(`Anotado ✅ *(2/${totalDataSteps(session.profile.product)})*\n¿Tenes alguna deuda mensual actual?\nInclui tarjetas, prestamos u otras cuotas.\nSi no tenes deudas, escribi 0.`)],
     session: s,
   };
 }
@@ -252,7 +299,7 @@ async function stepPedirDeudas({ session, bodyText }) {
   const s = { ...session, step: "pedir_prima", profile };
   const bien = PRODUCT_ASSET_WORD[profile.product] || "bien";
   return {
-    actions: [actionTexto(`Bien. Ahora necesito la prima o enganche exacto para ${bien === "propiedad" ? "la" : "el"} ${bien}.\nSi no tenes prima, escribi 0.`)],
+    actions: [actionTexto(`Bien *(3/3)*\n¿Con cuanto de prima o enganche contas para ${bien === "propiedad" ? "la" : "el"} ${bien}?\nSi no tenes prima, escribi 0.`)],
     session: s,
   };
 }
@@ -579,6 +626,7 @@ function redisplayStep(session) {
 
 async function handleIncoming({ session, bodyText, buttonPayload, buttonText, defaultCountry }) {
   const s = session || {};
+  buttonPayload = coerceButtonPayload(s, buttonPayload, bodyText || buttonText);
   if (isResetCommand(bodyText) && !buttonPayload && s.step !== "inicio") {
     return start({ ...s, step: "inicio" });
   }
