@@ -66,6 +66,10 @@ function totalDataSteps(product) {
   return product === "personal" ? 2 : 3;
 }
 
+function phaseLine(product, index, label, icon) {
+  return `${icon} *Fase ${index}/${totalDataSteps(product)}: ${label}*`;
+}
+
 function money(value, currency) {
   return currency + " " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("es-CR");
 }
@@ -266,7 +270,7 @@ async function stepPedirProducto({ session, buttonPayload, bodyText, defaultCoun
 
   return {
     actions: [actionTexto(
-      `Perfecto, *${PRODUCT_LABEL[product]}*.\nPara armar tu comparacion voy a pedirte los datos paso a paso.\n\nDale 👍 *(1/${totalDataSteps(product)})*\n¿Cuanto es tu ingreso neto mensual exacto?`
+      `Perfecto, *${PRODUCT_LABEL[product]}*.\nPara armar tu comparacion voy a pedirte los datos paso a paso.\n\n${phaseLine(product, 1, "Ingreso", "💰")}\n¿Cuanto es tu ingreso neto mensual exacto?`
     )],
     session: s,
   };
@@ -280,12 +284,16 @@ async function stepPedirIngreso({ session, bodyText }) {
 
   const s = { ...session, step: "pedir_deudas", profile: { ...session.profile, income: amount } };
   return {
-    actions: [actionTexto(`Anotado ✅ *(2/${totalDataSteps(session.profile.product)})*\n¿Tenes alguna deuda mensual actual?\nInclui tarjetas, prestamos u otras cuotas.\nSi no tenes deudas, escribi 0.`)],
+    actions: [actionTexto(`${phaseLine(session.profile.product, 2, "Deudas", "💳")}\n¿Tenes alguna deuda mensual actual?\nSi tenes, escribi el monto exacto.\nSi no tenes deudas, escribi 0.`)],
     session: s,
   };
 }
 
 async function stepPedirDeudas({ session, bodyText }) {
+  if (/^(si|sí|claro|tengo|correcto)$/i.test(normalize(bodyText))) {
+    return { actions: [actionTexto("Perfecto. ¿Cuanto pagas en deudas mensuales? Escribi el monto exacto, por ejemplo: 150000.")], session };
+  }
+
   const amount = extractAmount(bodyText);
   if (amount === null || isApproximateAmount(bodyText)) {
     return { actions: [actionTexto(exactAmountMessage("deudas mensuales"))], session };
@@ -298,8 +306,9 @@ async function stepPedirDeudas({ session, bodyText }) {
 
   const s = { ...session, step: "pedir_prima", profile };
   const bien = PRODUCT_ASSET_WORD[profile.product] || "bien";
+  const icon = profile.product === "hipoteca" ? "🏠" : "🚗";
   return {
-    actions: [actionTexto(`Bien *(3/3)*\n¿Con cuanto de prima o enganche contas para ${bien === "propiedad" ? "la" : "el"} ${bien}?\nSi no tenes prima, escribi 0.`)],
+    actions: [actionTexto(`${phaseLine(profile.product, 3, "Prima", icon)}\n¿Con cuanto de prima o enganche contas para ${bien === "propiedad" ? "la" : "el"} ${bien}?\nSi no tenes prima, escribi 0.`)],
     session: s,
   };
 }

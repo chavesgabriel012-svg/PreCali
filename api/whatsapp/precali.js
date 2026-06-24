@@ -1,9 +1,11 @@
-const { handleIncoming } = require("../_lib/precali-flow");
-const { getSession, saveSession } = require("../_lib/precali-memory");
+const { handleIncoming, redisplayStep } = require("../_lib/precali-flow");
+const { defaultSession, getSession, kvConfigured, resetSession, saveSession } = require("../_lib/precali-memory");
 const { readPreCaliDocument } = require("../_lib/precali-documents");
 const { fetchTwilioMedia } = require("../_lib/twilio-media");
 const { sendContent, sendText } = require("../_lib/precali-twilio");
 const { buildListaProducto, buildQuickReply, templatesConfigured } = require("../_lib/precali-content-templates");
+
+const INTERACTIVE_AFTER_TEXT_DELAY_MS = Number(process.env.PRECALI_INTERACTIVE_DELAY_MS || 1800);
 
 function escapeXml(value) {
   return String(value || "")
@@ -20,6 +22,10 @@ function twimlText(body) {
 
 function twimlEmpty() {
   return `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function readRawBody(req) {
@@ -116,6 +122,9 @@ async function dispatchActions(actions, to, from) {
         await sendText({ to, from, body });
       } catch (_) {}
     }
+    if (interactiveAction && INTERACTIVE_AFTER_TEXT_DELAY_MS > 0) {
+      await sleep(INTERACTIVE_AFTER_TEXT_DELAY_MS);
+    }
   } else if (!useInteractive && preTexts.length && interactiveAction) {
     twimlTextBody = preTexts.join("\n\n");
   }
@@ -184,6 +193,110 @@ function resolveButtonFromText(bodyText, session) {
   return null;
 }
 
+function commandName(bodyText) {
+  const match = String(bodyText || "").trim().match(/^\/([a-z0-9_-]+)\b/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function displayAmount(value, currency) {
+  const n = Math.max(0, Math.round(Number(value) || 0));
+  return `${currency || "CRC"} ${n.toLocaleString("es-CR")}`;
+}
+
+function productName(product) {
+  if (product === "vehiculo") return "vehiculo";
+  if (product === "hipoteca") return "vivienda";
+  if (product === "personal") return "personal";
+  return "sin definir";
+}
+
+function buildCommandsText() {
+  return [
+    "*Comandos tecnicos PreCali*",
+    "/reset - borra la memoria de este chat y reinicia el flujo.",
+    "/status - muestra paso actual y perfil detectado.",
+    "/instructions - muestra la logica del bot.",
+    "/replay - repite la pregunta o botones del paso actual.",
+    "/ping - confirma que el webhook responde.",
+    "/commands - muestra esta lista.",
+  ].join("\n");
+}
+
+function buildInstructionsText() {
+  return [
+    "*Logica de PreCali IA*",
+    "1. Detecta pais por telefono y usa moneda nativa por defecto.",
+    "2. Recoge producto, ingreso neto, deudas y prima.",
+    "3. Capacidad = ingreso x ratio del banco - deudas.",
+    "4. Monto maximo = cuota posible con tasa y plazo del banco.",
+    "5. Si hay prima o valor del bien, limita por financiamiento maximo.",
+    "6. Tasas, bancos y requisitos salen de data.js; no se inventan.",
+    "7. Despues de comparar, guia a aplicar, requisitos o pausar.",
+    "8. La memoria dura hasta 30 dias si Upstash/KV esta activo.",
+  ].join("\n");
+}
+
+function buildStatusText(session, defaultCountry) {
+  const profile = session.profile || {};
+  const currency = profile.currency || (defaultCountry === "CR" ? "CRC" : "");
+  const results = session.lastResults && Array.isArray(session.lastResults.opciones)
+    ? session.lastResults.opciones.length
+    : 0;
+
+  return [
+    "*Estado tecnico PreCali*",
+    `Memoria: ${kvConfigured() ? "Upstash/KV activo" : "fallback local"}`,
+    `Paso: ${session.step || "inicio"}`,
+    `Pais: ${profile.country || defaultCountry || "CR"}`,
+    `Moneda: ${currency || "sin definir"}`,
+    `Producto: ${productName(profile.product)}`,
+    `Ingreso: ${displayAmount(profile.income, currency)}`,
+    `Deudas: ${displayAmount(profile.debt, currency)}`,
+    `Prima: ${displayAmount(profile.downPayment, currency)}`,
+    `Banco objetivo: ${session.targetBank || "ninguno"}`,
+    `Opciones calculadas: ${results}`,
+  ].join("\n");
+}
+
+async function handleTechCommand({ command, session, from, defaultCountry }) {
+  if (!command) return null;
+
+  if (command === "reset") {
+    await resetSession(from);
+    const fresh = defaultSession();
+    const started = await handleIncoming({ session: fresh, bodyText: "", buttonPayload: "", buttonText: "", defaultCountry });
+    return {
+      actions: [ { kind: "text", body: "Memoria reiniciada para este chat." }, ...started.actions ],
+      session: started.session,
+    };
+  }
+
+  if (command === "instructions") {
+    return { actions: [{ kind: "text", body: buildInstructionsText() }], session };
+  }
+
+  if (command === "status" || command === "debug") {
+    return { actions: [{ kind: "text", body: buildStatusText(session, defaultCountry) }], session };
+  }
+
+  if (command === "replay") {
+    return { actions: redisplayStep(session), session };
+  }
+
+  if (command === "ping") {
+    return { actions: [{ kind: "text", body: `pong. Memoria: ${kvConfigured() ? "Upstash/KV activo" : "fallback local"}.` }], session };
+  }
+
+  if (command === "commands" || command === "help") {
+    return { actions: [{ kind: "text", body: buildCommandsText() }], session };
+  }
+
+  return {
+    actions: [{ kind: "text", body: `Comando no reconocido: /${command}\n\n${buildCommandsText()}` }],
+    session,
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
     res.statusCode = 200;
@@ -211,6 +324,17 @@ module.exports = async function handler(req, res) {
     const buttonText = params.ButtonText || null;
     const defaultCountry = explicitCountryFromPhone(from);
     const session = await getSession(from);
+    const techCommand = commandName(bodyText);
+
+    if (techCommand) {
+      const commandResult = await handleTechCommand({ command: techCommand, session, from, defaultCountry });
+      const { twimlBody } = await dispatchActions(commandResult.actions, from, toNumber);
+      await saveSession(from, commandResult.session);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/xml; charset=utf-8");
+      res.end(twimlBody ? twimlText(twimlBody) : twimlEmpty());
+      return;
+    }
 
     let effectiveBodyText = bodyText;
     let effectiveButtonPayload = buttonPayload;
