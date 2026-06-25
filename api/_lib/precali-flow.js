@@ -70,6 +70,66 @@ function phaseLine(product, index, label, icon) {
   return `${icon} *Fase ${index}/${totalDataSteps(product)}: ${label}*`;
 }
 
+function hasNoDebtSignal(text) {
+  return /\b(no\s+debo|no\s+tengo\s+deudas?|sin\s+deudas?|deuda\s+cero|no\s+pago\s+deudas?)\b/i.test(normalize(text));
+}
+
+function labeledAmount(text, labels) {
+  const raw = normalize(text);
+  const label = labels.join("|");
+  const amount = String.raw`\d+(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?`;
+  const amountWithSuffix = String.raw`(?:${amount})\s*(?:millon(?:es)?|mill\b|mil\b|k\b|m\b)?`;
+  const after = new RegExp(String.raw`\b(?:${label})\b[^\d]{0,30}(${amountWithSuffix})`, "i");
+  const before = new RegExp(String.raw`(${amountWithSuffix})\s*(?:de\s+)?(?:${label})\b`, "i");
+  const match = raw.match(after) || raw.match(before);
+  return match && match[1] ? extractAmount(match[1]) : null;
+}
+
+function extractFreeTextData(text) {
+  const product = detectProductFromText(text);
+  const income = labeledAmount(text, ["gano", "gana", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto"]);
+  const noDebt = hasNoDebtSignal(text);
+  const debt = noDebt
+    ? 0
+    : labeledAmount(text, ["debo", "deuda", "deudas", "pago", "pagos", "cuota", "cuotas", "prestamo", "tarjeta"]);
+  const downPayment = labeledAmount(text, ["prima", "enganche", "aporte", "abono", "ahorro", "ahorros", "ahorrado", "ahorrados"]);
+  return {
+    product,
+    income,
+    debt,
+    debtKnown: noDebt || debt !== null,
+    downPayment,
+  };
+}
+
+function promptForNextMissing(session, flags) {
+  const profile = session.profile || {};
+  if (!profile.income) {
+    return {
+      actions: [actionTexto(`${phaseLine(profile.product, 1, "Ingreso", "💰")}\n¿Cuanto es tu ingreso neto mensual exacto?`)],
+      session: { ...session, step: "pedir_ingreso" },
+    };
+  }
+
+  if (!flags.debtKnown) {
+    return {
+      actions: [actionTexto(`${phaseLine(profile.product, 2, "Deudas", "💳")}\n¿Tenes alguna deuda mensual actual?\nSi tenes, escribi el monto exacto.\nSi no tenes deudas, escribi 0.`)],
+      session: { ...session, step: "pedir_deudas" },
+    };
+  }
+
+  if (profile.product !== "personal" && profile.downPayment <= 0 && !flags.downPaymentKnown) {
+    const bien = PRODUCT_ASSET_WORD[profile.product] || "bien";
+    const icon = profile.product === "hipoteca" ? "🏠" : "🚗";
+    return {
+      actions: [actionTexto(`${phaseLine(profile.product, 3, "Prima", icon)}\n¿Con cuanto de prima o enganche contas para ${bien === "propiedad" ? "la" : "el"} ${bien}?\nSi no tenes prima, escribi 0.`)],
+      session: { ...session, step: "pedir_prima" },
+    };
+  }
+
+  return calcularYMostrar(session);
+}
+
 function money(value, currency) {
   return currency + " " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("es-CR");
 }
@@ -261,12 +321,27 @@ async function stepPedirProducto({ session, buttonPayload, bodyText, defaultCoun
 
   const country = session.profile.country || defaultCountry || "CR";
   const currency = DEFAULT_CURRENCY[country] || "CRC";
+  const extracted = bodyText ? extractFreeTextData(bodyText) : {};
+  const debtKnown = Boolean(extracted.debtKnown);
+  const downPaymentKnown = extracted.downPayment !== null && extracted.downPayment !== undefined;
   const s = {
     ...session,
     step: "pedir_ingreso",
     lead: session.lead || { ...LEAD_EMPTY },
-    profile: { ...session.profile, product, country, currency },
+    profile: {
+      ...session.profile,
+      product,
+      country,
+      currency,
+      income: extracted.income || session.profile.income || 0,
+      debt: debtKnown ? extracted.debt : (session.profile.debt || 0),
+      downPayment: downPaymentKnown ? extracted.downPayment : (session.profile.downPayment || 0),
+    },
   };
+
+  if (s.profile.income || debtKnown || downPaymentKnown) {
+    return promptForNextMissing(s, { debtKnown, downPaymentKnown });
+  }
 
   return {
     actions: [actionTexto(
@@ -277,12 +352,29 @@ async function stepPedirProducto({ session, buttonPayload, bodyText, defaultCoun
 }
 
 async function stepPedirIngreso({ session, bodyText }) {
-  const amount = extractAmount(bodyText);
+  const extracted = extractFreeTextData(bodyText);
+  const amount = extracted.income || extractAmount(bodyText);
   if (amount === null || amount <= 0 || isApproximateAmount(bodyText)) {
     return { actions: [actionTexto(exactAmountMessage("ingreso neto mensual"))], session };
   }
 
-  const s = { ...session, step: "pedir_deudas", profile: { ...session.profile, income: amount } };
+  const debtKnown = Boolean(extracted.debtKnown);
+  const downPaymentKnown = extracted.downPayment !== null && extracted.downPayment !== undefined;
+  const s = {
+    ...session,
+    step: "pedir_deudas",
+    profile: {
+      ...session.profile,
+      income: amount,
+      debt: debtKnown ? extracted.debt : session.profile.debt,
+      downPayment: downPaymentKnown ? extracted.downPayment : session.profile.downPayment,
+    },
+  };
+
+  if (debtKnown || downPaymentKnown) {
+    return promptForNextMissing(s, { debtKnown, downPaymentKnown });
+  }
+
   return {
     actions: [actionTexto(`${phaseLine(session.profile.product, 2, "Deudas", "💳")}\n¿Tenes alguna deuda mensual actual?\nSi tenes, escribi el monto exacto.\nSi no tenes deudas, escribi 0.`)],
     session: s,
@@ -290,6 +382,23 @@ async function stepPedirIngreso({ session, bodyText }) {
 }
 
 async function stepPedirDeudas({ session, bodyText }) {
+  const extracted = extractFreeTextData(bodyText);
+  const downPaymentKnown = extracted.downPayment !== null && extracted.downPayment !== undefined;
+  if (extracted.debtKnown) {
+    const profile = {
+      ...session.profile,
+      debt: extracted.debt,
+      downPayment: downPaymentKnown ? extracted.downPayment : session.profile.downPayment,
+    };
+    const s = { ...session, profile };
+    return promptForNextMissing(s, { debtKnown: true, downPaymentKnown });
+  }
+
+  if (downPaymentKnown) {
+    const s = { ...session, profile: { ...session.profile, downPayment: extracted.downPayment } };
+    return promptForNextMissing(s, { debtKnown: false, downPaymentKnown: true });
+  }
+
   if (/^(si|sí|claro|tengo|correcto)$/i.test(normalize(bodyText))) {
     return { actions: [actionTexto("Perfecto. ¿Cuanto pagas en deudas mensuales? Escribi el monto exacto, por ejemplo: 150000.")], session };
   }
@@ -301,6 +410,10 @@ async function stepPedirDeudas({ session, bodyText }) {
 
   const profile = { ...session.profile, debt: amount };
   if (profile.product === "personal") {
+    return calcularYMostrar({ ...session, profile });
+  }
+
+  if (profile.downPayment > 0) {
     return calcularYMostrar({ ...session, profile });
   }
 
@@ -352,6 +465,15 @@ async function calcularYMostrar(session) {
 }
 
 async function stepPostResultado({ session, buttonPayload, bodyText }) {
+  const requestedProduct = detectProductFromText(bodyText);
+  if (requestedProduct && requestedProduct !== session.profile.product) {
+    const s = {
+      ...session,
+      profile: { ...session.profile, product: requestedProduct },
+    };
+    return calcularYMostrar(s);
+  }
+
   if (buttonPayload === "aplicar") {
     const s = { ...session, step: "elegir_banco_aplicar" };
     return { actions: [actionBotones("A que banco queres aplicar?", topBankOptions(session))], session: s };
@@ -642,6 +764,9 @@ async function handleIncoming({ session, bodyText, buttonPayload, buttonText, de
 
   switch (s.step) {
     case "inicio":
+      if (bodyText && !isResetCommand(bodyText)) {
+        return stepPedirProducto({ session: { ...s, step: "pedir_producto" }, buttonPayload, bodyText, defaultCountry });
+      }
       return start(s);
     case "pedir_producto":
       return stepPedirProducto({ session: s, buttonPayload, bodyText, defaultCountry });
