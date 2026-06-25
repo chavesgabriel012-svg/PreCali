@@ -465,7 +465,7 @@ async function calcularYMostrar(session) {
 }
 
 async function stepPostResultado({ session, buttonPayload, bodyText }) {
-  const requestedProduct = detectProductFromText(bodyText);
+  const requestedProduct = buttonPayload ? null : detectProductFromText(bodyText);
   if (requestedProduct && requestedProduct !== session.profile.product) {
     const s = {
       ...session,

@@ -1,6 +1,7 @@
 const { handleIncoming, redisplayStep } = require("../_lib/precali-flow");
 const { defaultSession, getSession, kvConfigured, resetSession, saveSession } = require("../_lib/precali-memory");
 const { readPreCaliDocument } = require("../_lib/precali-documents");
+const { readImageFinancialDocument } = require("../_lib/precali-ocr");
 const { fetchTwilioMedia } = require("../_lib/twilio-media");
 const { sendContent, sendText } = require("../_lib/precali-twilio");
 const { buildListaProducto, buildQuickReply, templatesConfigured } = require("../_lib/precali-content-templates");
@@ -66,10 +67,11 @@ async function tryReadDocument(numMedia, mediaUrl, mediaType) {
     const media = await fetchTwilioMedia(mediaUrl);
     const contentType = mediaType || media.contentType;
     if (String(contentType || "").startsWith("image/")) {
-      return {
-        text: "",
-        note: "Recibi una imagen. Para continuar, envia PDF, DOCX o CSV con texto, o escribe los datos directamente.",
-      };
+      const result = await readImageFinancialDocument(media.buffer, contentType);
+      if (result.ok && result.extractedText && result.extractedText.trim().length >= 15) {
+        return { text: result.extractedText.trim().slice(0, 8000), note: "" };
+      }
+      return { text: "", note: result.message || "Recibi la imagen, pero no pude leer texto util. Intenta con una foto mas nitida o escribe los datos." };
     }
     const result = readPreCaliDocument(media.buffer, contentType);
     if (result.ok && result.extractedText && result.extractedText.trim().length >= 15) {
