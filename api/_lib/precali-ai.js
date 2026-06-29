@@ -42,7 +42,7 @@ function shouldUseAiForMessage(input) {
     return activeAiProvider(input) === "openai";
   }
 
-  if (process.env.PRECALI_AI_TEXT !== "1") return false;
+  if (process.env.PRECALI_AI_TEXT === "0") return false;
 
   const body = String(input && input.body ? input.body : "").trim();
   if (body.length < 18) return false;
@@ -530,7 +530,7 @@ function buildGroqAdvisorPrompt(input) {
 
 async function writeAdvisorReplyWithPreCaliAi(input) {
   if (!aiEnabled(input) || activeAiProvider(input) !== "groq") return null;
-  if (process.env.PRECALI_AI_TEXT !== "1") return null;
+  if (process.env.PRECALI_AI_TEXT === "0") return null;
 
   const response = await fetch(GROQ_API_URL, {
     method: "POST",

@@ -1,5 +1,6 @@
 const { calcularPrecalificacion, consultarRequisitos } = require("./precali-tools");
 const { resolverDuda } = require("./precali-agent");
+const { analyzeWithPreCaliAi } = require("./precali-ai");
 
 const DEFAULT_CURRENCY = { CR: "CRC" };
 const COUNTRY_CURRENCIES = {
@@ -74,7 +75,7 @@ function phaseLine(product, index, label, icon) {
 }
 
 function hasNoDebtSignal(text) {
-  return /\b(no\s+debo|no\s+tengo\s+deudas?|sin\s+deudas?|deuda\s+cero|no\s+pago\s+deudas?)\b/i.test(normalize(text));
+  return /\b(no\s+debo|no\s+devo|no\s+tengo\s+deudas?|sin\s+deudas?|deuda\s+cero|no\s+pago\s+deudas?)\b/i.test(normalize(text));
 }
 
 function detectCurrencyFromText(text, country) {
@@ -108,11 +109,11 @@ function labeledAmount(text, labels) {
 
 function extractFreeTextData(text, country) {
   const product = detectProductFromText(text);
-  const income = labeledAmount(text, ["gano", "gana", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto"]);
+  const income = labeledAmount(text, ["gano", "gana", "gno", "ganamos", "ingreso", "ingresos", "salario", "sueldo", "neto"]);
   const noDebt = hasNoDebtSignal(text);
   const debt = noDebt
     ? 0
-    : labeledAmount(text, ["debo", "deuda", "deudas", "pago", "pagos", "cuota", "cuotas", "prestamo", "tarjeta"]);
+    : labeledAmount(text, ["debo", "devo", "deuda", "deudas", "pago", "pagos", "cuota", "cuotas", "prestamo", "tarjeta"]);
   const downPayment = labeledAmount(text, ["prima", "enganche", "aporte", "abono", "ahorro", "ahorros", "ahorrado", "ahorrados"]);
   return {
     product,
@@ -122,6 +123,46 @@ function extractFreeTextData(text, country) {
     debtKnown: noDebt || debt !== null,
     downPayment,
   };
+}
+
+function valueKnown(value) {
+  return value !== null && value !== undefined;
+}
+
+function mergeAiExtraction(extracted, aiProfile, country) {
+  const ai = aiProfile || {};
+  const aiCurrency = allowedCurrency(ai.currency, country);
+  const debtKnown = extracted.debtKnown || valueKnown(ai.debt);
+  return {
+    product: extracted.product || ai.product || null,
+    currency: extracted.currency || aiCurrency || "",
+    income: valueKnown(extracted.income) ? extracted.income : ai.income,
+    debt: extracted.debtKnown ? extracted.debt : (valueKnown(ai.debt) ? ai.debt : extracted.debt),
+    debtKnown,
+    downPayment: valueKnown(extracted.downPayment) ? extracted.downPayment : ai.downPayment,
+  };
+}
+
+async function extractSmartTextData({ session, bodyText, defaultCountry }) {
+  const country = (session && session.profile && session.profile.country) || defaultCountry || "CR";
+  const extracted = extractFreeTextData(bodyText, country);
+
+  try {
+    const ai = await analyzeWithPreCaliAi({
+      body: bodyText,
+      recentMessages: [
+        `Paso actual: ${(session && session.step) || "inicio"}`,
+        `Perfil actual: ${JSON.stringify((session && session.profile) || {})}`,
+      ],
+    });
+    if (ai && ai.profile && Number(ai.confidence || 0) >= 0.45) {
+      return mergeAiExtraction(extracted, ai.profile, country);
+    }
+  } catch (_) {
+    // El filtro IA es una ayuda, no debe romper el flujo guiado.
+  }
+
+  return extracted;
 }
 
 function promptForNextMissing(session, flags) {
@@ -286,7 +327,7 @@ function formatResultados(calc) {
     );
   }
   if (calc.calidad_datos && calc.calidad_datos.startsWith("referencial")) {
-    lines.push("Datos referenciales para tu pais, en validacion con cada banco.");
+    lines.push("Datos de bancos de Costa Rica, sujetos a validacion final de cada entidad.");
   }
   return lines.join("\n").trim();
 }
@@ -327,22 +368,22 @@ function start(session) {
 function detectProductFromText(text) {
   const t = normalize(text);
   if (/^1$/.test(t) || /personal|consumo|libre inversion/.test(t)) return "personal";
-  if (/^2$/.test(t) || /carro|auto|vehicul|moto|pickup|camioneta/.test(t)) return "vehiculo";
+  if (/^2$/.test(t) || /carro|auto|vehicul|veicul|moto|pickup|camioneta/.test(t)) return "vehiculo";
   if (/^3$/.test(t) || /casa|vivienda|hipotec|apto|apartamento|terreno|lote|propiedad/.test(t)) return "hipoteca";
   return null;
 }
 
 async function stepPedirProducto({ session, buttonPayload, bodyText, defaultCountry }) {
+  const country = session.profile.country || defaultCountry || "CR";
+  const extracted = bodyText ? await extractSmartTextData({ session, bodyText, defaultCountry: country }) : {};
   let product = null;
   if (["personal", "vehiculo", "hipoteca"].includes(buttonPayload)) product = buttonPayload;
-  else if (bodyText) product = detectProductFromText(bodyText);
+  else if (bodyText) product = extracted.product || detectProductFromText(bodyText);
 
   if (!product) {
     return { actions: [actionListaProducto()], session };
   }
 
-  const country = session.profile.country || defaultCountry || "CR";
-  const extracted = bodyText ? extractFreeTextData(bodyText, country) : {};
   const currency = allowedCurrency(extracted.currency, country) || session.profile.currency || DEFAULT_CURRENCY[country] || "CRC";
   const debtKnown = Boolean(extracted.debtKnown);
   const downPaymentKnown = extracted.downPayment !== null && extracted.downPayment !== undefined;
@@ -374,7 +415,7 @@ async function stepPedirProducto({ session, buttonPayload, bodyText, defaultCoun
 }
 
 async function stepPedirIngreso({ session, bodyText }) {
-  const extracted = extractFreeTextData(bodyText, session.profile.country);
+  const extracted = await extractSmartTextData({ session, bodyText, defaultCountry: session.profile.country });
   const amount = extracted.income || extractAmount(bodyText);
   if (amount === null || amount <= 0 || isApproximateAmount(bodyText)) {
     return { actions: [actionTexto(exactAmountMessage("ingreso neto mensual"))], session };
@@ -406,7 +447,7 @@ async function stepPedirIngreso({ session, bodyText }) {
 }
 
 async function stepPedirDeudas({ session, bodyText }) {
-  const extracted = extractFreeTextData(bodyText, session.profile.country);
+  const extracted = await extractSmartTextData({ session, bodyText, defaultCountry: session.profile.country });
   const downPaymentKnown = extracted.downPayment !== null && extracted.downPayment !== undefined;
   if (extracted.debtKnown) {
     const profile = {
@@ -451,7 +492,8 @@ async function stepPedirDeudas({ session, bodyText }) {
 }
 
 async function stepPedirPrima({ session, bodyText }) {
-  const amount = extractAmount(bodyText);
+  const extracted = await extractSmartTextData({ session, bodyText, defaultCountry: session.profile.country });
+  const amount = valueKnown(extracted.downPayment) ? extracted.downPayment : extractAmount(bodyText);
   if (amount === null || isApproximateAmount(bodyText)) {
     return { actions: [actionTexto(exactAmountMessage("prima o enganche"))], session };
   }
