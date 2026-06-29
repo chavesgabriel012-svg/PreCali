@@ -29,6 +29,18 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function normalizePlainText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function isGreetingReset(bodyText) {
+  return /^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches)$/i.test(normalizePlainText(bodyText));
+}
+
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     if (req.body && typeof req.body === "object") {
@@ -248,6 +260,7 @@ function buildStatusText(session, defaultCountry) {
   return [
     "*Estado tecnico PreCali*",
     `Memoria: ${kvConfigured() ? "Upstash/KV activo" : "fallback local"}`,
+    `Version estado: ${session.version || "sin version"}`,
     `Paso: ${session.step || "inicio"}`,
     `Pais: ${profile.country || defaultCountry || "CR"}`,
     `Moneda: ${currency || "sin definir"}`,
@@ -332,6 +345,19 @@ module.exports = async function handler(req, res) {
       const commandResult = await handleTechCommand({ command: techCommand, session, from, defaultCountry });
       const { twimlBody } = await dispatchActions(commandResult.actions, from, toNumber);
       await saveSession(from, commandResult.session);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/xml; charset=utf-8");
+      res.end(twimlBody ? twimlText(twimlBody) : twimlEmpty());
+      return;
+    }
+
+    if (!buttonPayload && Number(numMedia || 0) <= 0 && session.step !== "inicio" && isGreetingReset(bodyText)) {
+      await resetSession(from);
+      const fresh = defaultSession();
+      const started = await handleIncoming({ session: fresh, bodyText: "", buttonPayload: "", buttonText: "", defaultCountry });
+      const actions = [{ kind: "text", body: "Listo, reiniciamos la conversacion." }, ...started.actions];
+      const { twimlBody } = await dispatchActions(actions, from, toNumber);
+      await saveSession(from, started.session);
       res.statusCode = 200;
       res.setHeader("Content-Type", "text/xml; charset=utf-8");
       res.end(twimlBody ? twimlText(twimlBody) : twimlEmpty());
